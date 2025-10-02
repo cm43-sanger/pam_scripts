@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pam_scripts"
+version = "0.0.0"
+authors = [
+  {name="Christian Moulsdale", email="cm43@sanger.ac.uk"},
+]
+description = "A collection of scripts to help with PAM analysis"
+readme = "README.md"
+requires-python = ">=3.5"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+dynamic = ["dependencies"]
+
+[project.scripts]
+embed-distances = "pam_scripts.embed_distances:main"
+
+[tool.setuptools.dynamic]
+dependencies = {file = ["requirements.txt"]}
