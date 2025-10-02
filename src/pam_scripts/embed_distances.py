@@ -36,7 +36,7 @@ def embed(distances, normalize: bool = True, num_jobs: int = 1):
         z = normalize_embedding(z)
     return typing.cast(
         np.ndarray[tuple[int, typing.Literal[2]], np.dtype[np.float64]], z
-    )  # need cast or Pylance complains
+    )  # need to cast or Pylance complains
 
 
 def cluster_embedding(z, eps: float = 0.05, min_samples: int = 10, num_jobs: int = 1):

@@ -20,6 +20,7 @@ dynamic = ["dependencies"]
 
 [project.scripts]
 embed-distances = "pam_scripts.embed_distances:main"
+kpy = "pam_scripts.kpy:main"
 
 [tool.setuptools.dynamic]
 dependencies = {file = ["requirements.txt"]}
