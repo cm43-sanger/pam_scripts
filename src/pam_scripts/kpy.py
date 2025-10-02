@@ -30,6 +30,10 @@ def read_manifest(filename: str):
 def count_kmers(
     directory: str, name: str, reads1: str, reads2: str, kmer_length: int = 21
 ):
+    if not os.path.exists(reads1):
+        raise FileNotFoundError(reads1)
+    if not os.path.exists(reads2):
+        raise FileNotFoundError(reads2)
     counts_name = os.path.join(directory, name)
     with NamedTemporaryFile() as input_file:
         with open(input_file.name, "w") as f:
@@ -43,9 +47,10 @@ def count_kmers(
                 f"@{input_file.name}",
                 counts_name,
                 directory,
-            ]
+            ],
+            capture_output=True,
         )
-    if result.returncode:
+    if result:
         raise RuntimeError("Failed to count kmers with kmc")
     return counts_name
 
@@ -53,7 +58,8 @@ def count_kmers(
 def get_histogram(counts_name: str):
     with NamedTemporaryFile() as histogram_file:
         result = subprocess.run(
-            ["kmc_tools", "transform", counts_name, "histogram", histogram_file.name]
+            ["kmc_tools", "transform", counts_name, "histogram", histogram_file.name],
+            capture_output=True,
         )
         if result.returncode:
             raise RuntimeError("Failed to get histogram from kmc database")
@@ -91,7 +97,8 @@ def filter_kmers(counts_name: str, threshold: int):
                 f"-ci{threshold}",
                 "dump",
                 kmer_file.name,
-            ]
+            ],
+            capture_output=True,
         )
         if result.returncode:
             raise RuntimeError("Failed to filter kmers")
@@ -111,7 +118,6 @@ def filter_kmers(counts_name: str, threshold: int):
 
 
 def sketch(name: str, reads1: str, reads2: str, kmer_length: int = 21):
-    print(name, reads1, reads2, file=sys.stderr)
     with TemporaryDirectory() as temporary_directory:
         counts_name = count_kmers(
             temporary_directory, name, reads1, reads2, kmer_length
