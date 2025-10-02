@@ -50,7 +50,7 @@ def count_kmers(
             ],
             capture_output=True,
         )
-    if result:
+    if result.returncode:
         raise RuntimeError("Failed to count kmers with kmc")
     return counts_name
 
