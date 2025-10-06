@@ -3,12 +3,8 @@ import numpy as np
 import os
 import pandas as pd
 import subprocess
-import sys
-import warnings
 from scipy.ndimage import gaussian_filter1d
-from scipy.optimize import curve_fit
 from scipy.signal import find_peaks
-from scipy.stats import nbinom as negative_binomial
 from tempfile import NamedTemporaryFile, TemporaryDirectory
 from . import pam_io
 
