@@ -3,6 +3,7 @@ import numpy as np
 import os
 import pandas as pd
 import subprocess
+from collections.abc import Iterable
 from scipy.ndimage import gaussian_filter1d
 from scipy.signal import find_peaks
 from tempfile import NamedTemporaryFile, TemporaryDirectory
@@ -10,7 +11,8 @@ from . import pam_io
 
 MINIMUM_COUNT = 2
 MAXIMUM_COUNT = 65535  # 16 bit maximum
-KMER_TRANSLATOR = str.maketrans("ACGT", "0123")
+KMER_COMPRESSOR = str.maketrans("ACGT", "0123")
+KMER_DECOMPRESSOR = str.maketrans("0123", "ACGT")
 
 
 def read_manifest(filename: str):
@@ -83,6 +85,17 @@ def get_threshold(counts, frequencies, right: float = 0.9, sigma: float = 0.01):
     return (threshold, ratio, coverage)
 
 
+def compress_kmers(kmers: Iterable[str]):
+    return (int(kmer.translate(KMER_COMPRESSOR), base=4) for kmer in kmers)
+
+
+def decompress_kmers(kmers: Iterable[int], kmer_length: int):
+    return (
+        np.base_repr(kmer, base=4, padding=kmer_length).translate(KMER_DECOMPRESSOR)
+        for kmer in kmers
+    )
+
+
 def filter_kmers(counts_name: str, threshold: int):
     with NamedTemporaryFile() as kmer_file:
         result = subprocess.run(
@@ -99,18 +112,8 @@ def filter_kmers(counts_name: str, threshold: int):
         if result.returncode:
             raise RuntimeError("Failed to filter kmers")
         with open(kmer_file.name) as f:
-            return np.fromiter(
-                (
-                    int(
-                        line.strip()
-                        .split("\t", maxsplit=1)[0]
-                        .translate(KMER_TRANSLATOR),
-                        4,
-                    )
-                    for line in f
-                ),
-                np.uint64,
-            )
+            kmers = (line.strip().split("\t", maxsplit=1)[0] for line in f)
+            return np.fromiter(compress_kmers(kmers), np.uint64)
 
 
 def sketch(name: str, reads1: str, reads2: str, kmer_length: int = 21):
