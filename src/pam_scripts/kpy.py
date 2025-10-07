@@ -3,6 +3,8 @@ import numpy as np
 import os
 import pandas as pd
 import subprocess
+import typing
+import warnings
 from collections.abc import Iterable
 from scipy.ndimage import gaussian_filter1d
 from scipy.signal import find_peaks
@@ -13,6 +15,15 @@ MINIMUM_COUNT = 2
 MAXIMUM_COUNT = 65535  # 16 bit maximum
 KMER_COMPRESSOR = str.maketrans("ACGT", "0123")
 KMER_DECOMPRESSOR = str.maketrans("0123", "ACGT")
+NUM_CPUS = os.cpu_count() or 1
+
+
+def resolve_num_threads(num_threads: typing.Optional[int]):
+    if num_threads is None:
+        return NUM_CPUS
+    if num_threads < 0:
+        raise ValueError("number of threads must be positive")
+    return num_threads
 
 
 def read_manifest(filename: str):
@@ -26,12 +37,21 @@ def read_manifest(filename: str):
 
 
 def count_kmers(
-    directory: str, name: str, reads1: str, reads2: str, kmer_length: int = 21
+    directory: str,
+    name: str,
+    reads1: str,
+    reads2: str,
+    kmer_length: int = 21,
+    num_threads: typing.Optional[int] = None,
 ):
     if not os.path.exists(reads1):
         raise FileNotFoundError(reads1)
     if not os.path.exists(reads2):
         raise FileNotFoundError(reads2)
+    num_threads = resolve_num_threads(num_threads)
+    if num_threads > 128:
+        warnings.warn("Reducing number of kmer counting threads to 128")
+        num_threads = 128
     counts_name = os.path.join(directory, name)
     with NamedTemporaryFile() as input_file:
         with open(input_file.name, "w") as f:
@@ -42,6 +62,7 @@ def count_kmers(
                 f"-k{kmer_length}",
                 f"-cs{MAXIMUM_COUNT}",
                 "-r",  # RAM only mode
+                f"-t{num_threads}",
                 f"@{input_file.name}",
                 counts_name,
                 directory,
@@ -53,10 +74,18 @@ def count_kmers(
     return counts_name
 
 
-def get_histogram(counts_name: str):
+def get_histogram(counts_name: str, num_threads: typing.Optional[int] = None):
+    num_threads = resolve_num_threads(num_threads)
     with NamedTemporaryFile() as histogram_file:
         result = subprocess.run(
-            ["kmc_tools", "transform", counts_name, "histogram", histogram_file.name],
+            [
+                "kmc_tools",
+                f"-t{num_threads}",
+                "transform",
+                counts_name,
+                "histogram",
+                histogram_file.name,
+            ],
             capture_output=True,
         )
         if result.returncode:
@@ -97,7 +126,10 @@ def decompress_kmers(kmers: Iterable[int], kmer_length: int):
     )
 
 
-def filter_kmers(counts_name: str, threshold: int):
+def filter_kmers(
+    counts_name: str, threshold: int, num_threads: typing.Optional[int] = None
+):
+    num_threads = resolve_num_threads(num_threads)
     with NamedTemporaryFile() as kmer_file:
         result = subprocess.run(
             [
@@ -117,14 +149,25 @@ def filter_kmers(counts_name: str, threshold: int):
             return np.fromiter(compress_kmers(kmers), np.uint64)
 
 
-def sketch(name: str, reads1: str, reads2: str, kmer_length: int = 21):
+def sketch(
+    name: str,
+    reads1: str,
+    reads2: str,
+    kmer_length: int = 21,
+    num_threads: typing.Optional[int] = None,
+):
     with TemporaryDirectory() as temporary_directory:
         counts_name = count_kmers(
-            temporary_directory, name, reads1, reads2, kmer_length
+            temporary_directory,
+            name,
+            reads1,
+            reads2,
+            kmer_length=kmer_length,
+            num_threads=num_threads,
         )
-        counts, frequencies = get_histogram(counts_name)
+        counts, frequencies = get_histogram(counts_name, num_threads=num_threads)
         threshold, ratio, coverage = get_threshold(counts, frequencies)
-        kmers = filter_kmers(counts_name, threshold)
+        kmers = filter_kmers(counts_name, threshold, num_threads=num_threads)
     return (counts, frequencies, threshold, ratio, coverage, kmers)
 
 
