@@ -64,23 +64,24 @@ def get_histogram(counts_name: str):
         return np.loadtxt(histogram_file.name, dtype=np.uint64, delimiter="\t").T
 
 
-def get_threshold(counts, frequencies, right: float = 0.9, sigma: float = 0.01):
-    cumulative_frequencies = np.cumsum(frequencies)
-    total = cumulative_frequencies[-1]
-    stop = np.searchsorted(cumulative_frequencies, right * total)
-    counts = counts[:stop]
-    frequencies = frequencies[:stop]
-    sigma = sigma * counts.max()
+def get_threshold(counts, frequencies, sigma: float = 3.0):
     smoothed_frequencies = gaussian_filter1d(frequencies, sigma)
     peaks = find_peaks(-smoothed_frequencies, distance=sigma)
     indices = peaks[0]
     if indices.size == 0:
-        raise ValueError("Failed to distinguish between signal and background kmers")
-    min_index = indices[0]
-    threshold = counts[min_index]
-    ratio = (total - frequencies[min_index - 1]) / total
-    counts = counts[min_index:]
-    frequencies = frequencies[min_index:]
+        # all signal
+        # this is extremely unlikely but resolve downstream
+        threshold = MINIMUM_COUNT
+        ratio = 1.0
+    else:
+        # factor out background
+        min_index = indices[0]
+        threshold = counts[min_index]
+        num_background = frequencies[:min_index].sum()
+        num_signal = frequencies[min_index:].sum()
+        ratio = num_signal / (num_background + num_signal)
+        counts = counts[min_index:]
+        frequencies = frequencies[min_index:]
     coverage = np.average(counts, weights=frequencies)
     return (threshold, ratio, coverage)
 
