@@ -1,15 +1,21 @@
 from . import _kmc
 
+import argparse
+import multiprocessing
 import numpy as np
 import os
+import shutil
+import sys
 import typing
 from collections.abc import Sequence
 from scipy.ndimage import gaussian_filter1d
 from scipy.signal import find_peaks
 from tempfile import NamedTemporaryFile, TemporaryDirectory
+from tqdm import tqdm as make_progressbar
 
 MINIMUM_COUNT = 2
 CLAMP_COUNT = 65_535  # 16 bit unsigned integer maximum
+NUM_CPUS = os.cpu_count() or 1
 
 
 def count_kmers(
@@ -102,11 +108,11 @@ def filter_counts(
 
 class SketchResult(typing.NamedTuple):
     success: bool
-    total: int
-    threshold: typing.Optional[int] = None
-    signal: typing.Optional[int] = None
-    coverage: typing.Optional[float] = None
-    variance: typing.Optional[float] = None
+    total: typing.Optional[int] = -1
+    signal: typing.Optional[int] = -1
+    threshold: typing.Optional[int] = -1
+    coverage: typing.Optional[float] = -1.0
+    variance: typing.Optional[float] = -1.0
 
 
 def sketch_reads(
@@ -139,3 +145,147 @@ def sketch_reads(
         coverage=coverage,
         variance=variance,
     )
+
+
+def load_manifest(manifest: str):
+    try:
+        with open(manifest) as f:
+            lines = [line.strip() for line in f]
+        names: list[str] = []
+        for i, line in enumerate(lines):
+            try:
+                name, _ = line.split("\t", maxsplit=1)
+            except ValueError:
+                raise ValueError(
+                    f"Line {i} has less than two entries, needs name and read file(s)"
+                )
+            names.append(name)
+    except Exception as e:
+        raise ValueError(f"unable to load manifest '{manifest}'") from e
+    return (lines, names)
+
+
+__sketch_from_manifest_store: typing.Optional[tuple[str, dict[str, typing.Any]]] = None
+
+
+def __sketch_from_manifest_worker_init(sketches_directory: str, kwargs: dict):
+    global __sketch_from_manifest_store
+    __sketch_from_manifest_store = (sketches_directory, kwargs)
+
+
+def __sketch_from_manifest_worker_func(line: str):
+    if __sketch_from_manifest_store is None:
+        raise RuntimeError(
+            "worker function called outside of initialized multiprocessing context."
+        )
+    name, *reads = line.split("\t")
+    sketches_directory, kwargs = __sketch_from_manifest_store
+    filename = os.path.join(sketches_directory, name)
+    try:
+        result = sketch_reads(reads, filename, **kwargs)
+    except:
+        result = SketchResult(success=False)
+    return "\t".join(map(str, result))
+
+
+def sketch_from_manifest(
+    manifest: str,
+    directory: str,
+    kmer_length: int = 21,
+    num_jobs: int = 1,
+    num_kmc_threads: typing.Optional[int] = None,
+    verbose: bool = False,
+):
+    if num_jobs < 1:
+        raise ValueError("the number of jobs must be positive")
+    if num_kmc_threads is not None and num_kmc_threads < 1:
+        raise ValueError("the number of KMC threads must be positive")
+    num_jobs = min(num_jobs, NUM_CPUS)
+    if num_kmc_threads is None or num_jobs * num_kmc_threads > NUM_CPUS:
+        num_kmc_threads = NUM_CPUS // num_jobs
+    if verbose:
+        print(
+            f"Sketching '{manifest}' with {num_jobs} jobs, "
+            f"each with {num_kmc_threads} threads.",
+            file=sys.stderr,
+        )
+    lines, names = load_manifest(manifest)
+    if os.path.exists(directory):
+        shutil.rmtree(directory)
+    sketches_directory = os.path.join(directory, "sketches")
+    os.makedirs(sketches_directory)  # also creates parent directory
+    with open(os.path.join(directory, "manifest.tsv"), "w") as f:
+        for line in lines:
+            print(line, file=f)
+    kwargs = dict(kmer_length=kmer_length, num_threads=num_kmc_threads)
+    with (
+        multiprocessing.Pool(
+            num_jobs,
+            initializer=__sketch_from_manifest_worker_init,
+            initargs=(sketches_directory, kwargs),
+        ) as pool,
+        make_progressbar(
+            desc="Sketching",
+            total=len(lines),
+            disable=not verbose,
+        ) as progressbar,
+        open(os.path.join(directory, "results.tsv"), "w") as f,
+    ):
+        print("name", "\t".join(SketchResult._fields), sep="\t", file=f)
+        for name, result in zip(
+            names, pool.imap(__sketch_from_manifest_worker_func, lines)
+        ):
+            print(name, result, sep="\t", file=f)
+            progressbar.update()
+    return len(lines)
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Generate kmer sketches from a manifest of read sets."
+    )
+    parser.add_argument(
+        "manifest",
+        help="Path to the manifest file listing input read sets (TSV format)",
+    )
+    parser.add_argument(
+        "directory", help="Output directory to store the generated sketches"
+    )
+    parser.add_argument(
+        "--kmer-length",
+        "-k",
+        type=int,
+        default=21,
+        help="K-mer length to use for sketching (default: 21)",
+    )
+    parser.add_argument(
+        "--num-jobs",
+        "-j",
+        type=int,
+        default=1,
+        help="Number of parallel jobs (default: 1)",
+    )
+    parser.add_argument(
+        "--num-kmc-threads",
+        "-t",
+        type=int,
+        default=None,
+        help="Threads per job for KMC (default: auto)",
+    )
+    parser.add_argument(
+        "--verbose", "-v", action="store_true", help="Enable verbose progress output"
+    )
+    args = parser.parse_args()
+
+    sketch_from_manifest(
+        args.manifest,
+        args.directory,
+        kmer_length=args.kmer_length,
+        num_jobs=args.num_jobs,
+        num_kmc_threads=args.num_kmc_threads,
+        verbose=args.verbose,
+    )
+
+
+if __name__ == "__main__":
+    main()
