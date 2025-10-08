@@ -84,7 +84,9 @@ def get_histogram(counts_name: str, num_threads: typing.Optional[int] = None):
             ["transform", counts_name, "histogram", histogram_file.name],
             num_threads=num_threads,
         )
-        return np.loadtxt(histogram_file.name, dtype=np.uint64, delimiter="\t").T
+        return np.loadtxt(
+            histogram_file.name, dtype=np.uint64, delimiter="\t", unpack=True
+        )
 
 
 def get_threshold(counts, frequencies, sigma: float = 3.0):
