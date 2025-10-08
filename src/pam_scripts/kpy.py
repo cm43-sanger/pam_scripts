@@ -74,7 +74,10 @@ def count_kmers(
         )
 
 
-def get_histogram(counts_name: str, num_threads: typing.Optional[int] = None):
+def get_histogram(counts_name: str, num_threads: typing.Optional[int] = None) -> tuple[
+    np.ndarray[tuple[int], np.dtype[np.uint16]],
+    np.ndarray[tuple[int], np.dtype[np.uint64]],
+]:
     with NamedTemporaryFile() as histogram_file:
         run_kmc(
             "kmc_tools",
@@ -82,14 +85,17 @@ def get_histogram(counts_name: str, num_threads: typing.Optional[int] = None):
             num_threads=num_threads,
         )
         counts, frequencies = np.loadtxt(
-            histogram_file.name, dtype=np.uint64, delimiter="\t", unpack=True
+            histogram_file.name,
+            dtype=np.dtype([("counts", np.uint16), ("frequencies", np.uint64)]),
+            delimiter="\t",
+            unpack=True,
         )
     return (counts, frequencies)
 
 
 class ThresholdResult(typing.NamedTuple):
     threshold: int
-    counts: np.ndarray[tuple[int], np.dtype[np.uint64]]
+    counts: np.ndarray[tuple[int], np.dtype[np.uint16]]
     frequencies: np.ndarray[tuple[int], np.dtype[np.uint64]]
 
 
