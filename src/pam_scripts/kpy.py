@@ -144,7 +144,7 @@ def load_kmers(filename: str, num_threads: typing.Optional[int] = None):
     with NamedTemporaryFile() as kmer_file:
         run_kmc(
             "kmc_tools",
-            ["transform", filename, "-ci1", f"dump", kmer_file.name],
+            ["transform", filename, "-ci1", "dump", kmer_file.name],
             num_threads=num_threads,
         )
         with open(kmer_file.name) as f:
