@@ -150,12 +150,12 @@ def load_kmers(filename: str, num_threads: typing.Optional[int] = None):
     with NamedTemporaryFile() as kmer_file:
         run_kmc(
             "kmc_tools",
-            ["transform", filename, "-ci1", "dump", kmer_file.name],
+            ["transform", filename, "-ci1", "dump", "-s", kmer_file.name],
             num_threads=num_threads,
         )
         with open(kmer_file.name) as f:
-            kmers = (line.strip().split("\t", maxsplit=1)[0] for line in f)
-            return np.fromiter(compress_kmers(kmers), np.uint64)
+            uncompressed_kmers = (line.strip().split("\t", maxsplit=1)[0] for line in f)
+            return np.fromiter(compress_kmers(uncompressed_kmers), np.uint64)
 
 
 class SketchResult(typing.NamedTuple):
