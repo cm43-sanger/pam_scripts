@@ -84,31 +84,20 @@ def get_histogram(counts_name: str, num_threads: typing.Optional[int] = None):
             ["transform", counts_name, "histogram", histogram_file.name],
             num_threads=num_threads,
         )
-        return np.loadtxt(
+        counts, frequencies = np.loadtxt(
             histogram_file.name, dtype=np.uint64, delimiter="\t", unpack=True
         )
+    return (counts, frequencies)
 
 
-def get_threshold(counts, frequencies, sigma: float = 3.0):
+def threshold_histogram(counts, frequencies, sigma: float = 3.0):
     smoothed_frequencies = gaussian_filter1d(frequencies, sigma)
     peaks = find_peaks(-smoothed_frequencies, distance=sigma)
     indices = peaks[0]
-    if indices.size == 0:
-        # all signal
-        # this is extremely unlikely but resolve downstream
-        threshold = MINIMUM_COUNT
-        ratio = 1.0
-    else:
-        # factor out background
-        min_index = indices[0]
-        threshold = counts[min_index]
-        num_background = frequencies[:min_index].sum()
-        num_signal = frequencies[min_index:].sum()
-        ratio = num_signal / (num_background + num_signal)
-        counts = counts[min_index:]
-        frequencies = frequencies[min_index:]
-    coverage = np.average(counts, weights=frequencies)
-    return (threshold, ratio, coverage)
+    if indices.size == 0:  # failed to identify background
+        return (None, counts, frequencies)
+    min_index = indices[0]
+    return (counts[min_index], counts[min_index:], frequencies[min_index:])
 
 
 def compress_kmers(kmers: Iterable[str]):
@@ -159,9 +148,14 @@ def sketch(
             reads, counts_name, kmer_length=kmer_length, num_threads=num_threads
         )
         counts, frequencies = get_histogram(counts_name, num_threads=num_threads)
-        threshold, ratio, coverage = get_threshold(counts, frequencies)
+        total = frequencies.sum()
+        threshold, counts, frequencies = threshold_histogram(counts, frequencies)
+        if threshold is None:
+            return (counts, frequencies, threshold, total, None, None)
         filter_kmers(counts_name, filename, threshold, num_threads=num_threads)
-    return (counts, frequencies, threshold, ratio, coverage)
+    signal = frequencies.sum()
+    coverage = np.average(counts, weights=frequencies)
+    return (counts, frequencies, threshold, total, signal, coverage)
 
 
 def read_manifest(filename: str):
