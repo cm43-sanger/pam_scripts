@@ -9,7 +9,7 @@ import os
 import pandas as pd
 import subprocess
 import typing
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from scipy.ndimage import gaussian_filter1d
 from scipy.signal import find_peaks
 from tempfile import NamedTemporaryFile, TemporaryDirectory
@@ -48,21 +48,20 @@ def run_kmc(
 
 
 def count_kmers(
-    directory: str,
-    name: str,
-    reads1: str,
-    reads2: str,
+    reads: Sequence[str],
+    counts_name: str,
     kmer_length: int = 21,
     num_threads: typing.Optional[int] = None,
 ):
-    if not os.path.exists(reads1):
-        raise FileNotFoundError(reads1)
-    if not os.path.exists(reads2):
-        raise FileNotFoundError(reads2)
-    counts_name = os.path.join(directory, name)
-    with NamedTemporaryFile() as input_file:
+    with (
+        NamedTemporaryFile() as input_file,
+        TemporaryDirectory() as temporary_directory,
+    ):
         with open(input_file.name, "w") as f:
-            f.write(f"{reads1}\n{reads2}\n")
+            for read in reads:
+                if not os.path.exists(read):
+                    raise FileNotFoundError(read)
+                print(read, file=f)
         run_kmc(
             "kmc",
             [
@@ -72,11 +71,10 @@ def count_kmers(
                 "-r",  # RAM only mode
                 f"@{input_file.name}",
                 counts_name,
-                directory,
+                temporary_directory,
             ],
             num_threads=num_threads,
         )
-    return counts_name
 
 
 def get_histogram(counts_name: str, num_threads: typing.Optional[int] = None):
@@ -123,12 +121,23 @@ def decompress_kmers(kmers: Iterable[int], kmer_length: int):
 
 
 def filter_kmers(
-    counts_name: str, threshold: int, num_threads: typing.Optional[int] = None
+    counts_name: str,
+    filtered_kmers_name: str,
+    threshold: int,
+    num_threads: typing.Optional[int] = None,
 ):
+    run_kmc(
+        "kmc_tools",
+        ["transform", counts_name, f"-ci{threshold}", "compact", filtered_kmers_name],
+        num_threads=num_threads,
+    )
+
+
+def load_kmers(filename: str, num_threads: typing.Optional[int] = None):
     with NamedTemporaryFile() as kmer_file:
         run_kmc(
             "kmc_tools",
-            ["transform", counts_name, f"-ci{threshold}", "dump", kmer_file.name],
+            ["transform", filename, "-ci1", f"dump", kmer_file.name],
             num_threads=num_threads,
         )
         with open(kmer_file.name) as f:
@@ -137,31 +146,26 @@ def filter_kmers(
 
 
 def sketch(
-    name: str,
-    reads1: str,
-    reads2: str,
+    reads: Sequence[str],
+    filename: str,
     kmer_length: int = 21,
     num_threads: typing.Optional[int] = None,
 ):
     with TemporaryDirectory() as temporary_directory:
-        counts_name = count_kmers(
-            temporary_directory,
-            name,
-            reads1,
-            reads2,
-            kmer_length=kmer_length,
-            num_threads=num_threads,
+        counts_name = os.path.join(temporary_directory, "counts")
+        count_kmers(
+            reads, counts_name, kmer_length=kmer_length, num_threads=num_threads
         )
         counts, frequencies = get_histogram(counts_name, num_threads=num_threads)
         threshold, ratio, coverage = get_threshold(counts, frequencies)
-        kmers = filter_kmers(counts_name, threshold, num_threads=num_threads)
-    return (counts, frequencies, threshold, ratio, coverage, kmers)
+        filter_kmers(counts_name, filename, threshold, num_threads=num_threads)
+    return (counts, frequencies, threshold, ratio, coverage)
 
 
 def read_manifest(filename: str):
     with pam_io.get_input_handle(filename) as f:
         df = pd.read_csv(
-            f, sep="\t", header=None, names=("name", "reads1", "reads2"), dtype=str
+            f, sep="\t", header=None, names=("name", "read1", "read2"), dtype=str
         )
     if not df["name"].is_unique:
         raise ValueError("Manifest file contains duplicate names.")
@@ -181,7 +185,7 @@ def main():
     df = read_manifest(args.manifest)
 
     for row in df.itertuples(index=False):
-        print(row.name, row.reads1, row.reads2, sep="\t")
+        print(row.name, row.read1, row.read2, sep="\t")
 
 
 if __name__ == "__main__":
