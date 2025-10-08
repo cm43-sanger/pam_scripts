@@ -12,28 +12,35 @@ from tempfile import NamedTemporaryFile, TemporaryDirectory
 from . import pam_io
 
 MINIMUM_COUNT = 2
-MAXIMUM_COUNT = 65535  # 16 bit maximum
+CLAMP_COUNT = 65_535  # 16 bit unsigned integer maximum
 KMER_COMPRESSOR = str.maketrans("ACGT", "0123")
 KMER_DECOMPRESSOR = str.maketrans("0123", "ACGT")
+MAX_THREADS = 128
 NUM_CPUS = os.cpu_count() or 1
 
 
 def resolve_num_threads(num_threads: typing.Optional[int]):
     if num_threads is None:
-        return NUM_CPUS
+        num_threads = NUM_CPUS
     if num_threads < 0:
         raise ValueError("number of threads must be positive")
-    return num_threads
+    return min(num_threads, MAX_THREADS)
 
 
-def read_manifest(filename: str):
-    with pam_io.get_input_handle(filename) as f:
-        df = pd.read_csv(
-            f, sep="\t", header=None, names=("name", "reads1", "reads2"), dtype=str
+def run_kmc(
+    command: str, operations: Iterable[str], num_threads: typing.Optional[int] = None
+):
+    num_threads = resolve_num_threads(num_threads)
+    subprocess_args = [command, f"-t{num_threads}"]
+    subprocess_args.extend(operations)
+    result = subprocess.run(subprocess_args, capture_output=True)
+    if result.returncode:
+        raise RuntimeError(
+            f"\n{subprocess_args}"
+            f"\nfailed with exit code {result.returncode}. stderr:"
+            f"\n{result.stderr.decode().strip()}"
         )
-    if not df["name"].is_unique:
-        raise ValueError("Manifest file contains duplicate names.")
-    return df
+    return result
 
 
 def count_kmers(
@@ -48,48 +55,33 @@ def count_kmers(
         raise FileNotFoundError(reads1)
     if not os.path.exists(reads2):
         raise FileNotFoundError(reads2)
-    num_threads = resolve_num_threads(num_threads)
-    if num_threads > 128:
-        warnings.warn("Reducing number of kmer counting threads to 128")
-        num_threads = 128
     counts_name = os.path.join(directory, name)
     with NamedTemporaryFile() as input_file:
         with open(input_file.name, "w") as f:
             f.write(f"{reads1}\n{reads2}\n")
-        result = subprocess.run(
+        run_kmc(
+            "kmc",
             [
-                "kmc",
                 f"-k{kmer_length}",
-                f"-cs{MAXIMUM_COUNT}",
+                f"-ci{MINIMUM_COUNT}",
+                f"-cs{CLAMP_COUNT}",
                 "-r",  # RAM only mode
-                f"-t{num_threads}",
                 f"@{input_file.name}",
                 counts_name,
                 directory,
             ],
-            capture_output=True,
+            num_threads=num_threads,
         )
-    if result.returncode:
-        raise RuntimeError("Failed to count kmers with kmc")
     return counts_name
 
 
 def get_histogram(counts_name: str, num_threads: typing.Optional[int] = None):
-    num_threads = resolve_num_threads(num_threads)
     with NamedTemporaryFile() as histogram_file:
-        result = subprocess.run(
-            [
-                "kmc_tools",
-                f"-t{num_threads}",
-                "transform",
-                counts_name,
-                "histogram",
-                histogram_file.name,
-            ],
-            capture_output=True,
+        run_kmc(
+            "kmc_tools",
+            ["transform", counts_name, "histogram", histogram_file.name],
+            num_threads=num_threads,
         )
-        if result.returncode:
-            raise RuntimeError("Failed to get histogram from kmc database")
         return np.loadtxt(histogram_file.name, dtype=np.uint64, delimiter="\t").T
 
 
@@ -129,21 +121,12 @@ def decompress_kmers(kmers: Iterable[int], kmer_length: int):
 def filter_kmers(
     counts_name: str, threshold: int, num_threads: typing.Optional[int] = None
 ):
-    num_threads = resolve_num_threads(num_threads)
     with NamedTemporaryFile() as kmer_file:
-        result = subprocess.run(
-            [
-                "kmc_tools",
-                "transform",
-                counts_name,
-                f"-ci{threshold}",
-                "dump",
-                kmer_file.name,
-            ],
-            capture_output=True,
+        run_kmc(
+            "kmc_tools",
+            ["transform", counts_name, f"-ci{threshold}", "dump", kmer_file.name],
+            num_threads=num_threads,
         )
-        if result.returncode:
-            raise RuntimeError("Failed to filter kmers")
         with open(kmer_file.name) as f:
             kmers = (line.strip().split("\t", maxsplit=1)[0] for line in f)
             return np.fromiter(compress_kmers(kmers), np.uint64)
@@ -169,6 +152,16 @@ def sketch(
         threshold, ratio, coverage = get_threshold(counts, frequencies)
         kmers = filter_kmers(counts_name, threshold, num_threads=num_threads)
     return (counts, frequencies, threshold, ratio, coverage, kmers)
+
+
+def read_manifest(filename: str):
+    with pam_io.get_input_handle(filename) as f:
+        df = pd.read_csv(
+            f, sep="\t", header=None, names=("name", "reads1", "reads2"), dtype=str
+        )
+    if not df["name"].is_unique:
+        raise ValueError("Manifest file contains duplicate names.")
+    return df
 
 
 def main():
