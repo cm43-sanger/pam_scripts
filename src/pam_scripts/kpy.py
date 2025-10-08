@@ -3,17 +3,14 @@ import shutil
 if shutil.which("kmc") is None:
     raise FileNotFoundError("Required executable 'kmc' not found in PATH.")
 
-import argparse
 import numpy as np
 import os
-import pandas as pd
 import subprocess
 import typing
 from collections.abc import Iterable, Sequence
 from scipy.ndimage import gaussian_filter1d
 from scipy.signal import find_peaks
 from tempfile import NamedTemporaryFile, TemporaryDirectory
-from . import pam_io
 
 MINIMUM_COUNT = 2
 CLAMP_COUNT = 65_535  # 16 bit unsigned integer maximum
@@ -81,7 +78,7 @@ def get_histogram(counts_name: str, num_threads: typing.Optional[int] = None):
     with NamedTemporaryFile() as histogram_file:
         run_kmc(
             "kmc_tools",
-            ["transform", counts_name, "histogram", histogram_file.name],
+            ["transform", counts_name, "-ci1", "histogram", histogram_file.name],
             num_threads=num_threads,
         )
         counts, frequencies = np.loadtxt(
@@ -90,14 +87,33 @@ def get_histogram(counts_name: str, num_threads: typing.Optional[int] = None):
     return (counts, frequencies)
 
 
+class ThresholdResult(typing.NamedTuple):
+    threshold: int
+    counts: np.ndarray[tuple[int], np.dtype[np.uint64]]
+    frequencies: np.ndarray[tuple[int], np.dtype[np.uint64]]
+
+
 def threshold_histogram(counts, frequencies, sigma: float = 3.0):
     smoothed_frequencies = gaussian_filter1d(frequencies, sigma)
     peaks = find_peaks(-smoothed_frequencies, distance=sigma)
     indices = peaks[0]
     if indices.size == 0:  # failed to identify background
-        return (None, counts, frequencies)
+        return None
     min_index = indices[0]
-    return (counts[min_index], counts[min_index:], frequencies[min_index:])
+    return ThresholdResult(
+        threshold=counts[min_index],
+        counts=counts[min_index:],
+        frequencies=frequencies[min_index:],
+    )
+
+
+def summarize_histogram(counts, frequencies) -> tuple[float, float]:
+    counts = np.array(counts, dtype=np.float64)
+    frequencies = np.array(frequencies, dtype=np.float64)
+    weights = frequencies / frequencies.sum()
+    mean = np.average(counts, weights=weights)
+    variance = np.average(np.square(counts - mean), weights=weights)
+    return (mean, variance)
 
 
 def compress_kmers(kmers: Iterable[str]):
@@ -136,6 +152,15 @@ def load_kmers(filename: str, num_threads: typing.Optional[int] = None):
             return np.fromiter(compress_kmers(kmers), np.uint64)
 
 
+class SketchResult(typing.NamedTuple):
+    success: bool
+    total: int
+    threshold: typing.Optional[int] = None
+    signal: typing.Optional[int] = None
+    coverage: typing.Optional[float] = None
+    variance: typing.Optional[float] = None
+
+
 def sketch(
     reads: Sequence[str],
     filename: str,
@@ -149,40 +174,20 @@ def sketch(
         )
         counts, frequencies = get_histogram(counts_name, num_threads=num_threads)
         total = frequencies.sum()
-        threshold, counts, frequencies = threshold_histogram(counts, frequencies)
-        if threshold is None:
-            return (counts, frequencies, threshold, total, None, None)
-        filter_kmers(counts_name, filename, threshold, num_threads=num_threads)
-    signal = frequencies.sum()
-    coverage = np.average(counts, weights=frequencies)
-    return (counts, frequencies, threshold, total, signal, coverage)
-
-
-def read_manifest(filename: str):
-    with pam_io.get_input_handle(filename) as f:
-        df = pd.read_csv(
-            f, sep="\t", header=None, names=("name", "read1", "read2"), dtype=str
+        threshold_result = threshold_histogram(counts, frequencies)
+        if threshold_result is None:
+            return SketchResult(success=False, total=total)
+        filter_kmers(
+            counts_name, filename, threshold_result.threshold, num_threads=num_threads
         )
-    if not df["name"].is_unique:
-        raise ValueError("Manifest file contains duplicate names.")
-    return df
-
-
-def main():
-    parser = argparse.ArgumentParser(description="")
-    parser.add_argument(
-        "manifest",
-        nargs="?",
-        default="-",
-        help="Input manifest file (defaults to stdin)",
+    coverage, variance = summarize_histogram(
+        threshold_result.counts, threshold_result.frequencies
     )
-    args = parser.parse_args()
-
-    df = read_manifest(args.manifest)
-
-    for row in df.itertuples(index=False):
-        print(row.name, row.read1, row.read2, sep="\t")
-
-
-if __name__ == "__main__":
-    main()
+    return SketchResult(
+        success=True,
+        total=total,
+        threshold=threshold_result.threshold,
+        signal=threshold_result.frequencies.sum(),
+        coverage=coverage,
+        variance=variance,
+    )
