@@ -1,10 +1,14 @@
+import shutil
+
+if shutil.which("kmc") is None:
+    raise FileNotFoundError("Required executable 'kmc' not found in PATH.")
+
 import argparse
 import numpy as np
 import os
 import pandas as pd
 import subprocess
 import typing
-import warnings
 from collections.abc import Iterable
 from scipy.ndimage import gaussian_filter1d
 from scipy.signal import find_peaks
