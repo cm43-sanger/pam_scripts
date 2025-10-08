@@ -188,21 +188,32 @@ def __sketch_from_manifest_worker_func(line: str):
     return "\t".join(map(str, result))
 
 
+def _resolve_num_threads(
+    num_jobs: typing.Optional[int] = None, num_kmc_threads: typing.Optional[int] = None
+):
+    if num_jobs is not None and num_jobs < 1:
+        raise ValueError("the number of jobs must be positive")
+    if num_kmc_threads is not None and num_kmc_threads < 1:
+        raise ValueError("the number of KMC threads must be positive")
+    if num_jobs is None:
+        if num_kmc_threads is None:
+            return (1, NUM_CPUS)
+        return (NUM_CPUS // num_kmc_threads, num_kmc_threads)
+    num_jobs = min(num_jobs, NUM_CPUS)
+    if num_kmc_threads is None or num_jobs * num_kmc_threads > NUM_CPUS:
+        return (num_jobs, NUM_CPUS // num_jobs)
+    return (num_jobs, num_kmc_threads)
+
+
 def sketch_from_manifest(
     manifest: str,
     directory: str,
     kmer_length: int = 21,
-    num_jobs: int = 1,
+    num_jobs: typing.Optional[int] = None,
     num_kmc_threads: typing.Optional[int] = None,
     verbose: bool = False,
 ):
-    if num_jobs < 1:
-        raise ValueError("the number of jobs must be positive")
-    if num_kmc_threads is not None and num_kmc_threads < 1:
-        raise ValueError("the number of KMC threads must be positive")
-    num_jobs = min(num_jobs, NUM_CPUS)
-    if num_kmc_threads is None or num_jobs * num_kmc_threads > NUM_CPUS:
-        num_kmc_threads = NUM_CPUS // num_jobs
+    num_jobs, num_kmc_threads = _resolve_num_threads(num_jobs, num_kmc_threads)
     if verbose:
         print(
             f"Sketching '{manifest}' with {num_jobs} jobs, "
@@ -262,8 +273,8 @@ def main():
         "--num-jobs",
         "-j",
         type=int,
-        default=1,
-        help="Number of parallel jobs (default: 1)",
+        default=None,
+        help="Number of parallel jobs (default: auto)",
     )
     parser.add_argument(
         "--num-kmc-threads",
