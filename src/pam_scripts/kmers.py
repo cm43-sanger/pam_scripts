@@ -23,7 +23,7 @@ def decompress_kmers(kmers: Iterable[int], kmer_length: int):
 def load_kmers(
     filename: str, num_threads: typing.Optional[int] = None
 ) -> np.ndarray[tuple[int], np.dtype[np.uint64]]:
-    return _kmers.load_kmc_kmers(filename)
+    # return _kmers.load_kmc_kmers(filename)
     import time
 
     start = time.perf_counter()
