@@ -27,6 +27,7 @@ def load_kmers(
     import time
 
     start = time.perf_counter()
+    x = _kmers.load_kmc_kmers(filename)
     x.sort()
     time1 = time.perf_counter() - start
     start = time.perf_counter()
