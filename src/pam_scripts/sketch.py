@@ -1,12 +1,14 @@
-from . import _kmc
+from . import _kmc, kmers
 
 import argparse
 import multiprocessing
 import numpy as np
 import os
+import pandas as pd
 import shutil
 import sys
 import typing
+import warnings
 from collections.abc import Sequence
 from scipy.ndimage import gaussian_filter1d
 from scipy.signal import find_peaks
@@ -191,6 +193,7 @@ def __sketch_from_manifest_worker_func(line: str):
 def _resolve_num_threads(
     num_jobs: typing.Optional[int] = None, num_kmc_threads: typing.Optional[int] = None
 ):
+    warnings.warn("Use total thread budget rather than num_kmc_threads")
     if num_jobs is not None and num_jobs < 1:
         raise ValueError("the number of jobs must be positive")
     if num_kmc_threads is not None and num_kmc_threads < 1:
@@ -249,6 +252,32 @@ def sketch_from_manifest(
             print(name, result, sep="\t", file=f)
             progressbar.update()
     return len(lines)
+
+
+def load_sketches(directory: str):
+    results = pd.read_csv(os.path.join(directory, "results.tsv"), sep="\t")
+    unsuccessful_names = []
+    names = []
+    kmers_list = []
+    sketches_directory = os.path.join(directory, "sketches")
+    with make_progressbar() as progressbar:
+        for row in results.itertuples():
+            if row.success and os.path.exists(
+                os.path.join(sketches_directory, f"{row.name}.kmc_pre")
+            ):
+                names.append(row.name)
+                kmers_list.append(
+                    kmers.load_kmers(os.path.join(sketches_directory, row.name))
+                )
+                progressbar.update()
+            else:
+                unsuccessful_names.append(row.name)
+
+    # success_mask = results["success"] == True
+    # successful_results = results[success_mask]
+    # print(results)
+    # print(results[results["success"] == False])
+    # sketches_directory = os.path.join(directory, "sketches")
 
 
 def main():
