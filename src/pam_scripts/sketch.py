@@ -266,6 +266,7 @@ def load_sketches(directory: str):
                 os.path.join(sketches_directory, f"{row.name}.kmc_pre")
             ):
                 names.append(row.name)
+
                 kmers_list.append(
                     kmers.load_kmers(os.path.join(sketches_directory, row.name))
                 )

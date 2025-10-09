@@ -1,4 +1,4 @@
-from . import _kmc
+from . import _kmc, _kmers
 
 import numpy as np
 import typing
@@ -21,6 +21,11 @@ def decompress_kmers(kmers: Iterable[int], kmer_length: int):
 
 
 def load_kmers(filename: str, num_threads: typing.Optional[int] = None):
+    x = _kmers.load_kmc_kmers(filename)
+    exit()
+    print(*x)
+    exit()
+    return _kmers.load_kmc_kmers(filename)
     with NamedTemporaryFile() as kmer_file:
         _kmc.call_kmc_tools(
             ["transform", filename, "-ci1", "dump", "-s", kmer_file.name],

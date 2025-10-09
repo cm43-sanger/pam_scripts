@@ -1,12 +1,12 @@
 [build-system]
-requires = ["setuptools"]
+requires = ["setuptools>=65.0", "wheel", "pybind11>=2.10"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "pam_scripts"
 version = "0.0.0"
 authors = [
-  {name="Christian Moulsdale", email="cm43@sanger.ac.uk"},
+  { name="Christian Moulsdale", email="cm43@sanger.ac.uk" },
 ]
 description = "A collection of scripts to help with PAM analysis"
 readme = "README.md"
@@ -24,4 +24,4 @@ kpy = "pam_scripts.kpy:main"
 kpy-sketch = "pam_scripts.sketch:main"
 
 [tool.setuptools.dynamic]
-dependencies = {file = ["requirements.txt"]}
+dependencies = { file = ["requirements.txt"] }
