@@ -194,7 +194,7 @@ def __sketch_from_manifest_worker_func(line: str):
         result = sketch_reads(reads, filename, **kwargs)
     except:
         result = SketchResult(success=False)
-    return "\t".join(map(str, result))
+    return result
 
 
 def _resolve_num_threads(
@@ -239,6 +239,7 @@ def sketch_from_manifest(
         for line in lines:
             print(line, file=f)
     kwargs = dict(kmer_length=kmer_length, num_threads=num_kmc_threads)
+    num_failures = 0
     with (
         multiprocessing.Pool(
             num_jobs,
@@ -249,6 +250,7 @@ def sketch_from_manifest(
             desc="Sketching",
             total=len(lines),
             disable=not verbose,
+            postfix={"failures": 0},
         ) as progressbar,
         open(os.path.join(directory, "results.tsv"), "w") as f,
     ):
@@ -256,7 +258,10 @@ def sketch_from_manifest(
         for name, result in zip(
             names, pool.imap(__sketch_from_manifest_worker_func, lines)
         ):
-            print(name, result, sep="\t", file=f)
+            if not result.success:
+                num_failures += 1
+                progressbar.set_postfix({"failures": num_failures})
+            print(name, "\t".join(map(str, result)), sep="\t", file=f)
             progressbar.update()
     return len(lines)
 
