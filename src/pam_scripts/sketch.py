@@ -103,7 +103,14 @@ def filter_counts(
     num_threads: typing.Optional[int] = None,
 ):
     _kmc.call_kmc_tools(
-        ["transform", counts_name, f"-ci{threshold}", "compact", filtered_kmers_name],
+        [
+            "transform",
+            counts_name,
+            f"-ci{threshold}",
+            "set_counts",
+            "1",
+            filtered_kmers_name,
+        ],
         num_threads=num_threads,
     )
 
@@ -262,6 +269,7 @@ def load_sketches(directory: str):
     sketches_directory = os.path.join(directory, "sketches")
     with make_progressbar() as progressbar:
         for row in results.itertuples():
+            print(row)
             if row.success and os.path.exists(
                 os.path.join(sketches_directory, f"{row.name}.kmc_pre")
             ):
