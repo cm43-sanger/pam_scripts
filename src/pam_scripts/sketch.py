@@ -278,15 +278,9 @@ def load_sketches(directory: str):
                 os.path.join(sketches_directory, f"{row.name}.kmc_pre")
             ):
                 names.append(row.name)
-                x, time1, time2 = kmers.load_kmers(
-                    os.path.join(sketches_directory, row.name)
+                kmers_list.append(
+                    kmers.load_kmers(os.path.join(sketches_directory, row.name))
                 )
-                if not x.size == row.signal:
-                    progressbar.write(f"{row.name}, {x.size}, {row.signal}")
-
-                # kmers_list.append(
-                #     kmers.load_kmers(os.path.join(sketches_directory, row.name))
-                # )
                 progressbar.update()
             else:
                 unsuccessful_names.append(row.name)
