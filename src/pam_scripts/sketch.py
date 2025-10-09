@@ -53,17 +53,28 @@ def get_histogram(counts_name: str, num_threads: typing.Optional[int] = None) ->
     np.ndarray[tuple[int], np.dtype[np.uint16]],
     np.ndarray[tuple[int], np.dtype[np.uint64]],
 ]:
-    with NamedTemporaryFile() as histogram_file:
-        _kmc.call_kmc_tools(
-            ["transform", counts_name, "-ci1", "histogram", histogram_file.name],
-            num_threads=num_threads,
-        )
-        counts, frequencies = np.loadtxt(
-            histogram_file.name,
-            dtype=np.dtype([("counts", np.uint16), ("frequencies", np.uint64)]),
-            delimiter="\t",
-            unpack=True,
-        )
+    # with NamedTemporaryFile() as histogram_file:
+    #     _kmc.call_kmc_tools(
+    #         ["transform", counts_name, "-ci1", "histogram", histogram_file.name],
+    #         num_threads=num_threads,
+    #     )
+    #     counts, frequencies = np.loadtxt(
+    #         histogram_file.name,
+    #         dtype=np.dtype([("counts", np.uint16), ("frequencies", np.uint64)]),
+    #         delimiter="\t",
+    #         unpack=True,
+    #     )
+    histogram_filename = f"{counts_name}.hist.dat"
+    _kmc.call_kmc_tools(
+        ["transform", counts_name, "-ci1", "histogram", histogram_filename],
+        num_threads=num_threads,
+    )
+    counts, frequencies = np.loadtxt(
+        histogram_filename,
+        dtype=np.dtype([("counts", np.uint16), ("frequencies", np.uint64)]),
+        delimiter="\t",
+        unpack=True,
+    )
     return (counts, frequencies)
 
 
