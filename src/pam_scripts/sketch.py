@@ -279,7 +279,7 @@ def load_sketches(directory: str):
         if row.success:
             names.append(row.name)
         else:
-            unsuccessful_names.append(name)
+            unsuccessful_names.append(row.name)
     filenames = (os.path.join(sketches_directory, name) for name in names)
     with (
         multiprocessing.Pool() as pool,
