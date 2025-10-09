@@ -300,7 +300,11 @@ def load_sketches(directory: str):
             total=len(names),
         ) as progressbar,
     ):
-        kmers_list = list(progressbar)
+        kmers_list_lookup = {
+            name: kmers_list for name, kmers_list in zip(names, progressbar)
+        }
+    results["kmers"] = results["name"].map(kmers_list_lookup)
+    return results
 
 
 def main():
