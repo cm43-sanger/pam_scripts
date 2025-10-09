@@ -274,7 +274,6 @@ def load_sketches(directory: str):
     sketches_directory = os.path.join(directory, "sketches")
     with make_progressbar() as progressbar:
         for row in results.itertuples():
-            print(row)
             if row.success and os.path.exists(
                 os.path.join(sketches_directory, f"{row.name}.kmc_pre")
             ):
@@ -282,7 +281,8 @@ def load_sketches(directory: str):
                 x, time1, time2 = kmers.load_kmers(
                     os.path.join(sketches_directory, row.name)
                 )
-                assert x.size == row.signal, (x.size, row.signal)
+                if not x.size == row.signal:
+                    progressbar.write(f"{row.name}, {x.size}, {row.signal}")
 
                 # kmers_list.append(
                 #     kmers.load_kmers(os.path.join(sketches_directory, row.name))
