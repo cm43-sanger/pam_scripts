@@ -23,23 +23,4 @@ def decompress_kmers(kmers: Iterable[int], kmer_length: int):
 def load_kmers(
     filename: str, num_threads: typing.Optional[int] = None
 ) -> np.ndarray[tuple[int], np.dtype[np.uint64]]:
-    # return _kmers.load_kmc_kmers(filename)
-    import time
-
-    start = time.perf_counter()
-    x = _kmers.load_kmc_kmers(filename)
-    x.sort()
-    time1 = time.perf_counter() - start
-    start = time.perf_counter()
-    with NamedTemporaryFile() as kmer_file:
-        _kmc.call_kmc_tools(
-            ["transform", filename, "-ci1", "dump", "-s", kmer_file.name],
-            num_threads=num_threads,
-        )
-        with open(kmer_file.name) as f:
-            uncompressed_kmers = (line.strip().split("\t", maxsplit=1)[0] for line in f)
-            y = np.fromiter(compress_kmers(uncompressed_kmers), np.uint64)
-    time2 = time.perf_counter() - start
-    print(x.size)
-    assert np.all(x == y)
-    return (x, time1, time2)
+    return _kmers.load_kmc_kmers(filename)
