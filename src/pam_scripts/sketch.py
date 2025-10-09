@@ -266,30 +266,30 @@ def sketch_from_manifest(
     return len(lines)
 
 
+def __load_sketches_worker_func(filename: str):
+    return kmers.load_kmers(filename, num_threads=1)
+
+
 def load_sketches(directory: str):
     results = pd.read_csv(os.path.join(directory, "results.tsv"), sep="\t")
     unsuccessful_names = []
     names = []
-    kmers_list = []
     sketches_directory = os.path.join(directory, "sketches")
-    with make_progressbar() as progressbar:
-        for row in results.itertuples():
-            if row.success and os.path.exists(
-                os.path.join(sketches_directory, f"{row.name}.kmc_pre")
-            ):
-                names.append(row.name)
-                kmers_list.append(
-                    kmers.load_kmers(os.path.join(sketches_directory, row.name))
-                )
-                progressbar.update()
-            else:
-                unsuccessful_names.append(row.name)
-
-    # success_mask = results["success"] == True
-    # successful_results = results[success_mask]
-    # print(results)
-    # print(results[results["success"] == False])
-    # sketches_directory = os.path.join(directory, "sketches")
+    for row in results.itertuples():
+        if row.success:
+            names.append(name)
+        else:
+            unsuccessful_names.append(name)
+    filenames = (os.path.join(sketches_directory, name) for name in names)
+    with (
+        multiprocessing.Pool() as pool,
+        make_progressbar(
+            pool.imap(__load_sketches_worker_func, filenames),
+            desc="Loading databases",
+            total=len(names),
+        ) as progressbar,
+    ):
+        kmers_list = list(progressbar)
 
 
 def main():
