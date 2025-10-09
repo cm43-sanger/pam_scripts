@@ -108,7 +108,7 @@ def filter_counts(
             counts_name,
             f"-ci{threshold}",
             "set_counts",
-            "1",
+            str(CLAMP_COUNT),
             filtered_kmers_name,
         ],
         num_threads=num_threads,
