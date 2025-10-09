@@ -21,11 +21,13 @@ def decompress_kmers(kmers: Iterable[int], kmer_length: int):
 
 
 def load_kmers(filename: str, num_threads: typing.Optional[int] = None):
+    import time
+
+    start = time.perf_counter()
     x = _kmers.load_kmc_kmers(filename)
-    exit()
-    print(*x)
-    exit()
-    return _kmers.load_kmc_kmers(filename)
+    x.sort()
+    print(time.perf_counter() - start)
+    start = time.perf_counter()
     with NamedTemporaryFile() as kmer_file:
         _kmc.call_kmc_tools(
             ["transform", filename, "-ci1", "dump", "-s", kmer_file.name],
@@ -33,4 +35,7 @@ def load_kmers(filename: str, num_threads: typing.Optional[int] = None):
         )
         with open(kmer_file.name) as f:
             uncompressed_kmers = (line.strip().split("\t", maxsplit=1)[0] for line in f)
-            return np.fromiter(compress_kmers(uncompressed_kmers), np.uint64)
+            y = np.fromiter(compress_kmers(uncompressed_kmers), np.uint64)
+    print(time.perf_counter() - start)
+    assert np.all(x == y)
+    return x
