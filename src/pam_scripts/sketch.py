@@ -277,7 +277,7 @@ def load_sketches(directory: str):
     sketches_directory = os.path.join(directory, "sketches")
     for row in results.itertuples():
         if row.success:
-            names.append(name)
+            names.append(row.name)
         else:
             unsuccessful_names.append(name)
     filenames = (os.path.join(sketches_directory, name) for name in names)
