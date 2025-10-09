@@ -282,7 +282,7 @@ def load_sketches(directory: str):
                 x, time1, time2 = kmers.load_kmers(
                     os.path.join(sketches_directory, row.name)
                 )
-                assert x.size == row.signal
+                assert x.size == row.signal, (x.size, row.signal)
 
                 # kmers_list.append(
                 #     kmers.load_kmers(os.path.join(sketches_directory, row.name))
