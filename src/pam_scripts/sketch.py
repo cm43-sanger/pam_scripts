@@ -307,6 +307,11 @@ def load_sketches(directory: str):
     return results
 
 
+# def calculate_distances(results: pd.DataFrame):
+#     mask =
+#     num = results['']
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Generate kmer sketches from a manifest of read sets."
