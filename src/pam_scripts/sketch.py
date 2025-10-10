@@ -53,7 +53,9 @@ def count_kmers(
         )
 
 
-def get_histogram(counts_name: str, num_threads: typing.Optional[int] = None) -> tuple[
+def get_histogram(
+    counts_name: str, histogram_filename: str, num_threads: typing.Optional[int] = None
+) -> tuple[
     np.ndarray[tuple[int], np.dtype[np.uint16]],
     np.ndarray[tuple[int], np.dtype[np.uint64]],
 ]:
@@ -68,7 +70,6 @@ def get_histogram(counts_name: str, num_threads: typing.Optional[int] = None) ->
     #         delimiter="\t",
     #         unpack=True,
     #     )
-    histogram_filename = f"{counts_name}.hist.dat"
     _kmc.call_kmc_tools(
         ["transform", counts_name, "-ci1", "histogram", histogram_filename],
         num_threads=num_threads,
@@ -150,7 +151,9 @@ def sketch_reads(
         count_kmers(
             reads, counts_name, kmer_length=kmer_length, num_threads=num_threads
         )
-        counts, frequencies = get_histogram(counts_name, num_threads=num_threads)
+        counts, frequencies = get_histogram(
+            counts_name, f"{filename}.hist.dat", num_threads=num_threads
+        )
         total = frequencies.sum()
         threshold_result = threshold_histogram(counts, frequencies)
         if threshold_result is None:
