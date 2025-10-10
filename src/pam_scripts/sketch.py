@@ -10,6 +10,7 @@ import sys
 import typing
 import warnings
 from collections.abc import Sequence
+from numba import njit, prange
 from scipy.ndimage import gaussian_filter1d
 from scipy.signal import find_peaks
 from tempfile import NamedTemporaryFile, TemporaryDirectory
@@ -279,6 +280,46 @@ def sketch_from_manifest(
 
 def __load_sketches_worker_func(filename: str):
     return kmers.load_kmers(filename, num_threads=1)
+
+
+@njit
+def _jaccard_similarity_numba(a, b):
+    """Compute Jaccard similarity between two sorted uint64 arrays."""
+    i = 0
+    j = 0
+    intersection = 0
+    len_a = a.size
+    len_b = b.size
+    while i < len_a and j < len_b:
+        ai = a[i]
+        bj = b[j]
+        intersection += ai == bj
+        i += ai <= bj
+        j += ai >= bj
+    union = len_a + len_b - intersection
+    if union == 0:
+        return 0.0
+    return intersection / union
+
+
+@njit(parallel=True)
+def pairwise_jaccard_numba(arrays):
+    """
+    Compute pairwise Jaccard similarity between a tuple of sorted uint64 arrays.
+    Returns a symmetric float64 matrix.
+    """
+    n = len(arrays)
+    result = np.empty((n, n), dtype=np.float64)
+
+    # Compute upper triangle in parallel
+    for i in prange(n):
+        result[i, i] = 1.0  # diagonal
+        for j in range(i + 1, n):
+            sim = _jaccard_similarity_numba(arrays[i], arrays[j])
+            result[i, j] = sim
+            result[j, i] = sim  # symmetric
+
+    return result
 
 
 def load_sketches(directory: str):
