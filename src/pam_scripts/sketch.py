@@ -333,10 +333,14 @@ def pairwise_jaccard(arrays):
     ):
         thread = threading.Thread(target=_pairwise_jaccard_numba, args=(n, arrays, d))
         thread.start()
-        while current < total and thread.is_alive():
-            step = int(next(f).strip())
+        for line in f:
+            step = int(line.strip())
             current += step
             progressbar.update(step)
+        # while current < total and thread.is_alive():
+        #     step = int(next(f).strip())
+        #     current += step
+        #     progressbar.update(step)
         thread.join()
     return d
 
