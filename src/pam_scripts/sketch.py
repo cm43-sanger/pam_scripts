@@ -309,12 +309,12 @@ def _jaccard_similarity_numba(a, b):
 def _pairwise_jaccard_numba(n, arrays, d, progress):
     # Compute upper triangle in parallel
     for i in prange(n):
-        print(i)
         d[i, i] = 1.0  # diagonal
         for j in range(i + 1, n):
             sim = _jaccard_similarity_numba(arrays[i], arrays[j])
             d[i, j] = sim
             d[j, i] = sim  # symmetric
+        progress[0] += i
 
 
 def pairwise_jaccard(arrays):
