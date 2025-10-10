@@ -313,6 +313,7 @@ def pairwise_jaccard_numba(arrays):
 
     # Compute upper triangle in parallel
     for i in prange(n):
+        print(i)
         result[i, i] = 1.0  # diagonal
         for j in range(i + 1, n):
             sim = _jaccard_similarity_numba(arrays[i], arrays[j])
