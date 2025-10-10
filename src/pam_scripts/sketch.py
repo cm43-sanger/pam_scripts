@@ -1,15 +1,18 @@
 from . import _kmc, kmers
 
 import argparse
+import io
 import multiprocessing
 import numpy as np
 import os
 import pandas as pd
 import shutil
 import sys
+import threading
 import typing
 import warnings
 from collections.abc import Sequence
+from contextlib import redirect_stdout
 from numba import njit, prange
 from scipy.ndimage import gaussian_filter1d
 from scipy.signal import find_peaks
@@ -303,24 +306,39 @@ def _jaccard_similarity_numba(a, b):
 
 
 @njit(parallel=True)
-def pairwise_jaccard_numba(arrays):
-    """
-    Compute pairwise Jaccard similarity between a tuple of sorted uint64 arrays.
-    Returns a symmetric float64 matrix.
-    """
-    n = len(arrays)
-    result = np.empty((n, n), dtype=np.float64)
-
+def _pairwise_jaccard_numba(n, arrays, d):
     # Compute upper triangle in parallel
     for i in prange(n):
         print(i)
-        result[i, i] = 1.0  # diagonal
+        d[i, i] = 1.0  # diagonal
         for j in range(i + 1, n):
             sim = _jaccard_similarity_numba(arrays[i], arrays[j])
-            result[i, j] = sim
-            result[j, i] = sim  # symmetric
+            d[i, j] = sim
+            d[j, i] = sim  # symmetric
 
-    return result
+
+def pairwise_jaccard(arrays):
+    """
+    Compute pairwise Jaccard similarity between a list of sorted uint64 arrays.
+    Returns a symmetric float64 matrix.
+    """
+    n = len(arrays)
+    d = np.empty((n, n), dtype=np.float64)
+    current = 0
+    total = n * (n - 1) // 2
+    with (
+        io.StringIO() as f,
+        redirect_stdout(f),
+        make_progressbar(total=total) as progressbar,
+    ):
+        thread = threading.Thread(target=_pairwise_jaccard_numba, args=(n, arrays, d))
+        thread.start()
+        while current < total and thread.is_alive():
+            step = int(next(f).strip())
+            current += step
+            progressbar.update(step)
+        thread.join()
+    return d
 
 
 def load_sketches(directory: str):
