@@ -1,7 +1,6 @@
 from . import _kmc, kmers
 
 import argparse
-import io
 import multiprocessing
 import numpy as np
 import os
@@ -9,6 +8,7 @@ import pandas as pd
 import shutil
 import sys
 import threading
+import time
 import typing
 import warnings
 from collections.abc import Sequence
@@ -306,7 +306,7 @@ def _jaccard_similarity_numba(a, b):
 
 
 @njit(parallel=True)
-def _pairwise_jaccard_numba(n, arrays, d):
+def _pairwise_jaccard_numba(n, arrays, d, progress):
     # Compute upper triangle in parallel
     for i in prange(n):
         print(i)
@@ -324,23 +324,19 @@ def pairwise_jaccard(arrays):
     """
     n = len(arrays)
     d = np.empty((n, n), dtype=np.float64)
-    current = 0
     total = n * (n - 1) // 2
-    with (
-        io.StringIO() as f,
-        redirect_stdout(f),
-        make_progressbar(total=total) as progressbar,
-    ):
-        thread = threading.Thread(target=_pairwise_jaccard_numba, args=(n, arrays, d))
+    with make_progressbar(total=total) as progressbar:
+        progress = np.zeros(1, dtype=np.int64)
+        thread = threading.Thread(
+            target=_pairwise_jaccard_numba, args=(n, arrays, d, progress)
+        )
         thread.start()
-        for line in f:
-            step = int(line.strip())
-            current += step
-            progressbar.update(step)
-        # while current < total and thread.is_alive():
-        #     step = int(next(f).strip())
-        #     current += step
-        #     progressbar.update(step)
+        last = 0
+        while thread.is_alive():
+            current = progress[0]
+            progressbar.update(current - last)
+            last = current
+            time.sleep(0.01)
         thread.join()
     return d
 
