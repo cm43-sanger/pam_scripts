@@ -29,7 +29,9 @@ def _call_executable(
     num_threads = _resolve_num_threads(num_threads)
     subprocess_args = [executable, f"-t{num_threads}"]
     subprocess_args.extend(args)
-    result = subprocess.run(subprocess_args, capture_output=True)
+    print(subprocess_args)
+    # result = subprocess.run(subprocess_args, capture_output=True)
+    result = subprocess.run(subprocess_args)
     if result.returncode:
         raise RuntimeError(
             f"\n{subprocess_args}"

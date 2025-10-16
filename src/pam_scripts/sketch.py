@@ -80,6 +80,7 @@ def get_histogram(
         delimiter="\t",
         unpack=True,
     )
+    print(frequencies.sum())
     return (counts, frequencies)
 
 
@@ -148,9 +149,11 @@ def sketch_reads(
 ):
     with TemporaryDirectory() as temporary_directory:
         counts_name = os.path.join(temporary_directory, "counts")
+        print("yes")
         count_kmers(
             reads, counts_name, kmer_length=kmer_length, num_threads=num_threads
         )
+        print("counted")
         counts, frequencies = get_histogram(
             counts_name, f"{filename}.hist.dat", num_threads=num_threads
         )
@@ -205,6 +208,7 @@ def __sketch_from_manifest_worker_func(line: str):
         raise RuntimeError(
             "worker function called outside of initialized multiprocessing context."
         )
+    print(line)
     name, *reads = line.split("\t")
     sketches_directory, kwargs = __sketch_from_manifest_store
     filename = os.path.join(sketches_directory, name)
