@@ -8,6 +8,7 @@ for executable in ("kmc", "kmc_tools"):
 
 from . import _kmc
 
+import argparse
 import math
 import numpy as np
 import os
@@ -130,3 +131,63 @@ def count_kmers_paired_reads(
         coverage = estimate_coverage(db_intersection)
         min_count = math.ceil(threshold * coverage)
         _filter_database(db_intersection, output_db, min_count)
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Count k-mers from one or two FASTQ/FASTA files using KMC."
+    )
+    parser.add_argument(
+        "-1",
+        "--read1",
+        required=True,
+        help="Optional threshold (fraction of coverage) to filter k-mers",
+    )
+    parser.add_argument(
+        "-2",
+        "--read2",
+        help="Optional threshold (fraction of coverage) to filter k-mers",
+    )
+    parser.add_argument(
+        "-o", "--output_db", required=True, help="Output KMC database path"
+    )
+    parser.add_argument(
+        "-k", "--kmer_length", type=int, default=21, help="K-mer length (default 21)"
+    )
+    parser.add_argument(
+        "-f",
+        "--threshold",
+        type=float,
+        default=None,
+        help="Optional threshold (fraction of coverage) to filter k-mers",
+    )
+    parser.add_argument(
+        "-t",
+        "--num_threads",
+        type=int,
+        default=None,
+        help=f"Number of threads (default {NUM_CPUS}, max {MAX_THREADS})",
+    )
+    args = parser.parse_args()
+
+    if args.read2:
+        count_kmers_paired_reads(
+            args.read1,
+            args.read2,
+            args.output_db,
+            kmer_length=args.kmer_length,
+            threshold=args.threshold,
+            num_threads=args.num_threads,
+        )
+    else:
+        count_kmers_single_read(
+            args.read1,
+            args.output_db,
+            kmer_length=args.kmer_length,
+            threshold=args.threshold,
+            num_threads=args.num_threads,
+        )
+
+
+if __name__ == "__main__":
+    main()

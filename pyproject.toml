@@ -21,6 +21,7 @@ dynamic = ["dependencies"]
 [project.scripts]
 embed-distances = "pam_scripts.embed_distances:main"
 kpy = "pam_scripts.kpy:main"
+kpy-count = "pam_scripts.kmc:main"
 kpy-sketch = "pam_scripts.sketch:main"
 
 [tool.setuptools.dynamic]
