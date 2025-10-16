@@ -82,7 +82,7 @@ def _intersect_databases(input_db1: str, input_db2: str, output_db: str):
 
 def _filter_database(input_db: str, output_db: str, min_count: int):
     _call_kmc(
-        ["kmc_tools", "transform", input_db, "reduce", f"-ci{min_count}", output_db],
+        ["kmc_tools", "transform", input_db, f"-ci{min_count}", "reduce", output_db],
         f"Failed to filter database '{input_db}'.",
     )
 
