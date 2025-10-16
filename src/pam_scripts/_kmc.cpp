@@ -62,7 +62,7 @@ py::array_t<uint64_t> load_kmers(const std::string &db_path)
     return kmers;
 }
 
-PYBIND11_MODULE(_kmc_db, m)
+PYBIND11_MODULE(_kmc, m)
 {
     m.doc() = "Read all k-mers from a KMC database into a NumPy uint64_t array";
     m.def("estimate_coverage", &estimate_coverage,
