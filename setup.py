@@ -14,9 +14,9 @@ if sys.platform == "win32":
 
 # --- C++ pybind11 extension ---
 kmers_ext = Extension(
-    "pam_scripts._kmers",
+    "pam_scripts._kmc_db",
     sources=[
-        "src/pam_scripts/_kmers.cpp",
+        "src/pam_scripts/_kmc_db.cpp",
         "src/pam_scripts/kmc_api/kmc_file.cpp",
         "src/pam_scripts/kmc_api/kmer_api.cpp",
         "src/pam_scripts/kmc_api/mmer.cpp",

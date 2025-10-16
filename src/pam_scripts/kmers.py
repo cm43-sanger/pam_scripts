@@ -1,9 +1,7 @@
-from . import _kmc, _kmers
+from . import _kmc_db
 
 import numpy as np
-import typing
 from collections.abc import Iterable
-from tempfile import NamedTemporaryFile
 
 KMER_COMPRESSOR = str.maketrans("ACGT", "0123")
 KMER_DECOMPRESSOR = str.maketrans("0123", "ACGT")
@@ -20,7 +18,9 @@ def decompress_kmers(kmers: Iterable[int], kmer_length: int):
     )
 
 
-def load_kmers(
-    filename: str, num_threads: typing.Optional[int] = None
-) -> np.ndarray[tuple[int], np.dtype[np.uint64]]:
-    return _kmers.load_kmc_kmers(filename)
+def load_kmers(filename: str) -> np.ndarray[tuple[int], np.dtype[np.uint64]]:
+    return _kmc_db.load_kmers(filename)
+
+
+def estimate_coverage(filename: str) -> float:
+    return _kmc_db.estimate_coverage(filename)
