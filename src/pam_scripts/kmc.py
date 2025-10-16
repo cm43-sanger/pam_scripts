@@ -13,6 +13,7 @@ import numpy as np
 import os
 import subprocess
 import typing
+from collections.abc import Sequence
 from tempfile import TemporaryDirectory
 
 MAX_THREADS = 128
@@ -37,6 +38,13 @@ def _resolve_num_threads(num_threads: typing.Optional[int]):
     return min(num_threads, MAX_THREADS)
 
 
+def _call_kmc(args: Sequence[str], error_message: str):
+    result = subprocess.run(args, capture_output=True)
+    if result.returncode != 0:
+        err = result.stderr.decode(errors="ignore")
+        raise RuntimeError(f"\n{err}\n{error_message}.")
+
+
 def _count_kmers(
     read: str,
     output_db: str,
@@ -49,7 +57,7 @@ def _count_kmers(
         raise ValueError("k must be in range [1, 256]")
     num_threads = _resolve_num_threads(num_threads)
     with TemporaryDirectory() as temporary_directory:
-        result = subprocess.run(
+        _call_kmc(
             [
                 "kmc",
                 f"-t{num_threads}",
@@ -61,35 +69,22 @@ def _count_kmers(
                 output_db,
                 temporary_directory,
             ],
-            capture_output=True,
-        )
-    if result.returncode != 0:
-        raise RuntimeError(
-            f"\n{result.stderr.decode()}\nFailed to count kmers in '{read}'."
+            f"Failed to count kmers in '{read}'",
         )
 
 
 def _intersect_databases(input_db1: str, input_db2: str, output_db: str):
-    result = subprocess.run(
+    _call_kmc(
         ["kmc_tools", "simple", input_db1, input_db2, "intersect", output_db],
-        capture_output=True,
+        f"Failed to intersect databases '{input_db1}' and '{input_db2}'.",
     )
-    if result.returncode != 0:
-        raise RuntimeError(
-            f"\n{result.stderr.decode()}\nFailed to intersect databases "
-            f"'{input_db1}' and  '{input_db2}'."
-        )
 
 
 def _filter_database(input_db: str, output_db: str, min_count: int):
-    result = subprocess.run(
+    _call_kmc(
         ["kmc_tools", "transform", input_db, "reduce", f"-ci{min_count}", output_db],
-        capture_output=True,
+        f"Failed to filter database '{input_db}'.",
     )
-    if result.returncode != 0:
-        raise RuntimeError(
-            f"\n{result.stderr.decode()}\nFailed to filter database '{input_db}'."
-        )
 
 
 def count_kmers_single_read(
