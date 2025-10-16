@@ -12,7 +12,6 @@ import time
 import typing
 import warnings
 from collections.abc import Sequence
-from contextlib import redirect_stdout
 from numba import njit, prange
 from scipy.ndimage import gaussian_filter1d
 from scipy.signal import find_peaks
