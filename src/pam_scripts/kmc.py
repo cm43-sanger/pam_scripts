@@ -18,6 +18,12 @@ from collections.abc import Sequence
 from tempfile import TemporaryDirectory
 
 NUM_CPUS = os.cpu_count() or 1
+DEFAULT_KMER_LENGTH = 21
+MINIMUM_KMER_LENGTH = 1
+MAXIMUM_KMER_LENGTH = 31
+MINIMUM_MAX_MEMORY = 2.0
+MAXIMUM_MAX_MEMORY = 1024.0
+MAXIMUM_NUM_THREADS = 128
 MINIMUM_COUNT = 2
 CLAMP_COUNT = 65_535  # 16 bit unsigned integer maximum
 
@@ -76,7 +82,7 @@ class KMCHelper:
 
     def __init__(
         self,
-        kmer_length: int = 21,
+        kmer_length: int = DEFAULT_KMER_LENGTH,
         threshold: float = 0.0,
         max_memory: typing.Optional[float] = None,
         num_threads: typing.Optional[int] = None,
@@ -93,8 +99,11 @@ class KMCHelper:
     @kmer_length.setter
     def kmer_length(self, value: int):
         value = int(value)
-        if value < 1 or value > 256:
-            raise ValueError("kmer_length must be in range [1, 256]")
+        if value % 2 == 0 or value < MINIMUM_KMER_LENGTH or value > MAXIMUM_KMER_LENGTH:
+            raise ValueError(
+                "kmer_length must be odd and in range "
+                f"[{MINIMUM_KMER_LENGTH}, {MAXIMUM_KMER_LENGTH}]"
+            )
         self._kmer_length = value
 
     @property
@@ -114,10 +123,10 @@ class KMCHelper:
 
     @max_memory.setter
     def max_memory(self, value: typing.Optional[float]):
-        value = 2.0 if value is None else float(value)
-        if value < 2.0:
-            raise ValueError("max_memory must be at least 2 GB")
-        self._max_memory = min(value, 1024.0)
+        value = MINIMUM_MAX_MEMORY if value is None else float(value)
+        if value < MINIMUM_MAX_MEMORY:
+            raise ValueError(f"max_memory must be at least {MINIMUM_MAX_MEMORY} GB")
+        self._max_memory = min(value, MAXIMUM_MAX_MEMORY)
 
     @property
     def num_threads(self):
@@ -194,19 +203,10 @@ class KMCHelper:
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Count k-mers from one or two FASTQ/FASTA files using KMC."
+        description="Count kmers from one or two FASTQ/FASTA files using KMC."
     )
-    parser.add_argument(
-        "-1",
-        "--read1",
-        required=True,
-        help="Optional threshold (fraction of coverage) to filter k-mers",
-    )
-    parser.add_argument(
-        "-2",
-        "--read2",
-        help="Optional threshold (fraction of coverage) to filter k-mers",
-    )
+    parser.add_argument("-1", "--read1", required=True, help="First readset path")
+    parser.add_argument("-2", "--read2", help="Second readset path (optional)")
     parser.add_argument(
         "-o", "--output_db", required=True, help="Output KMC database path"
     )
@@ -214,23 +214,24 @@ def main():
         "-k",
         "--kmer_length",
         type=int,
-        default=21,
-        help="K-mer length (default 21, >=1, <=31)",
+        default=DEFAULT_KMER_LENGTH,
+        help=f"Kmer length (default {DEFAULT_KMER_LENGTH}, odd, "
+        f">={MINIMUM_KMER_LENGTH}, <={MAXIMUM_KMER_LENGTH})",
     )
     parser.add_argument(
         "-f",
         "--threshold",
         type=float,
         default=0.0,
-        help="Optional threshold (count as fraction of coverage) below which "
-        "to filter k-mers (default 0)",
+        help="Filter kmers with counts below threshold * coverage (default 0)",
     )
     parser.add_argument(
         "-m",
         "--max_memory",
         type=float,
-        default=2.0,
-        help=f"Max amount of RAM in GB (default 2, >=2)",
+        default=MINIMUM_MAX_MEMORY,
+        help=f"Max amount of RAM in GB (default {MINIMUM_MAX_MEMORY}, "
+        f">={MINIMUM_MAX_MEMORY})",
     )
     parser.add_argument(
         "-t",
