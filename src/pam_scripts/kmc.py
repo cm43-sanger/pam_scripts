@@ -25,6 +25,7 @@ MAXIMUM_MAX_MEMORY = 1024.0
 MAXIMUM_NUM_THREADS = 128
 MINIMUM_COUNT = 2
 CLAMP_COUNT = 65_535  # 16 bit unsigned integer maximum
+HIDE_PROGRESS_FLAG = "-hp"
 
 
 def _load_kmers(db: str) -> np.ndarray[tuple[int], np.dtype[np.uint64]]:
@@ -40,7 +41,7 @@ def _intersect_databases(input_db1: str, input_db2: str, output_db: str):
         subprocess.run(
             [
                 "kmc_tools",
-                "-hp",  # hide progress
+                HIDE_PROGRESS_FLAG,
                 "simple",
                 input_db1,
                 input_db2,
@@ -60,7 +61,7 @@ def _filter_database(input_db: str, output_db: str, min_count: int):
         subprocess.run(
             [
                 "kmc_tools",
-                "-hp",  # hide progress
+                HIDE_PROGRESS_FLAG,
                 "transform",
                 input_db,
                 f"-ci{min_count}",
@@ -149,7 +150,7 @@ class KMCHelper:
                 subprocess.run(
                     [
                         "kmc",
-                        "-hp",  # hide progress
+                        HIDE_PROGRESS_FLAG,
                         f"-t{self.num_threads}",
                         f"-k{self.kmer_length}",
                         f"-m{self.max_memory}",
