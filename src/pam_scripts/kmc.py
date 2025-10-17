@@ -14,7 +14,6 @@ import numpy as np
 import os
 import subprocess
 import typing
-from collections.abc import Sequence
 from tempfile import TemporaryDirectory
 
 NUM_CPUS = os.cpu_count() or 1
