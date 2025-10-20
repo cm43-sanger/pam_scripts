@@ -38,6 +38,7 @@
         "sstream": "cpp",
         "streambuf": "cpp",
         "typeinfo": "cpp",
-        "algorithm": "cpp"
+        "algorithm": "cpp",
+        "ratio": "cpp"
     }
 }
