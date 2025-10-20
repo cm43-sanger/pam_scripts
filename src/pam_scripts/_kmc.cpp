@@ -8,6 +8,27 @@
 
 namespace py = pybind11;
 
+py::tuple get_info(const std::string &db_path)
+{
+    CKMCFile kmc_file;
+    if (!kmc_file.OpenForListing(db_path))
+        throw std::runtime_error("Failed to open KMC database: " + db_path);
+    CKMCFileInfo info;
+    if (!kmc_file.Info(info))
+        throw std::runtime_error("Unkown error reading info from " + db_path);
+    kmc_file.Close();
+    return py::make_tuple(
+        info.kmer_length,
+        info.mode,
+        info.counter_size,
+        info.lut_prefix_length,
+        info.signature_len,
+        info.min_count,
+        info.max_count,
+        info.both_strands,
+        info.total_kmers);
+}
+
 // Read all kmers from a KMC database and estimate the coverage
 double estimate_coverage(const std::string &db_path)
 {
@@ -65,6 +86,9 @@ py::array_t<uint64_t> load_kmers(const std::string &db_path)
 PYBIND11_MODULE(_kmc, m)
 {
     m.doc() = "Read all k-mers from a KMC database into a NumPy uint64_t array";
+    m.def("get_info", &get_info,
+          py::arg("path"),
+          "Get information about a KMC database.");
     m.def("estimate_coverage", &estimate_coverage,
           py::arg("path"),
           "Estimate the coverage of a KMC database.");

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import shutil
 
 for executable in ("kmc", "kmc_tools"):
@@ -14,6 +16,8 @@ import numpy as np
 import os
 import subprocess
 import typing
+import warnings
+from dataclasses import dataclass
 from tempfile import TemporaryDirectory
 
 NUM_CPUS = os.cpu_count() or 1
@@ -28,50 +32,128 @@ CLAMP_COUNT = 65_535  # 16 bit unsigned integer maximum
 HIDE_PROGRESS_FLAG = "-hp"
 
 
-def _load_kmers(db: str) -> np.ndarray[tuple[int], np.dtype[np.uint64]]:
-    return _kmc.load_kmers(db)
+class DirectConstructionError(UserWarning):
+    pass
 
 
-def _estimate_coverage(db: str) -> float:
-    return _kmc.estimate_coverage(db)
+warnings.simplefilter("error", DirectConstructionError)
 
 
-def _intersect_databases(input_db1: str, input_db2: str, output_db: str):
-    try:
-        subprocess.run(
-            [
-                "kmc_tools",
-                HIDE_PROGRESS_FLAG,
-                "simple",
-                input_db1,
-                input_db2,
-                "intersect",
-                output_db,
-            ],
-            check=True,
-        )
-    except Exception as e:
-        raise RuntimeError(
-            f"Failed to intersect databases '{input_db1}' and '{input_db2}'."
-        ) from e
+@dataclass(frozen=True)
+class KMCDatabase:
+    path: str
+    kmer_length: int
+    mode: int
+    counter_size: int
+    lut_prefix_length: int
+    signature_len: int
+    min_count: int
+    max_count: int
+    both_strands: bool
+    total_kmers: int
+
+    def __post_init__(self):
+        warnings.warn("construct with load_database", DirectConstructionError)
+
+    def load_kmers(self) -> np.ndarray[tuple[int], np.dtype[np.uint64]]:
+        return _kmc.load_kmers(self.path)
+
+    def estimate_coverage(self) -> float:
+        return _kmc.estimate_coverage(self.path)
+
+    def filter(self, min_count: float, output_db_path: str):
+        if min_count < 0.0:
+            raise ValueError(f"min_count must be non-negative, got {min_count}")
+        try:
+            subprocess.run(
+                [
+                    "kmc_tools",
+                    HIDE_PROGRESS_FLAG,
+                    "transform",
+                    self.path,
+                    f"-ci{math.ceil(min_count)}",
+                    "reduce",
+                    output_db_path,
+                ],
+                check=True,
+            )
+        except Exception as e:
+            raise RuntimeError(f"Failed to filter database '{self.path}'.") from e
+        return load_database(output_db_path)
+
+    def intersect(self, other_db: KMCDatabase, output_db_path: str):
+        if self.kmer_length != other_db.kmer_length:
+            raise ValueError(
+                f"KMC databases have mismatched kmer_length: "
+                f"{self.kmer_length} != {other_db.kmer_length}"
+            )
+        try:
+            subprocess.run(
+                [
+                    "kmc_tools",
+                    HIDE_PROGRESS_FLAG,
+                    "simple",
+                    self.path,
+                    other_db.path,
+                    "intersect",
+                    output_db_path,
+                ],
+                check=True,
+            )
+        except Exception as e:
+            raise RuntimeError(
+                f"Failed to intersect databases '{self.path}' and '{other_db.path}'."
+            ) from e
+        return load_database(output_db_path)
 
 
-def _filter_database(input_db: str, output_db: str, min_count: int):
-    try:
-        subprocess.run(
-            [
-                "kmc_tools",
-                HIDE_PROGRESS_FLAG,
-                "transform",
-                input_db,
-                f"-ci{min_count}",
-                "reduce",
-                output_db,
-            ],
-            check=True,
-        )
-    except Exception as e:
-        raise RuntimeError(f"Failed to filter database '{input_db}'.") from e
+def load_database(db_path: str):
+    with warnings.catch_warnings(action="ignore", category=DirectConstructionError):
+        return KMCDatabase(db_path, *_kmc.get_info(db_path))
+
+
+# def intersect_databases(
+#     input_db1: KMCDatabase, input_db2: KMCDatabase, output_db_path: str
+# ):
+#     if input_db1.kmer_length != input_db2.kmer_length:
+#         raise ValueError
+#     try:
+#         subprocess.run(
+#             [
+#                 "kmc_tools",
+#                 HIDE_PROGRESS_FLAG,
+#                 "simple",
+#                 input_db1.path,
+#                 input_db2.path,
+#                 "intersect",
+#                 output_db_path,
+#             ],
+#             check=True,
+#         )
+#     except Exception as e:
+#         raise RuntimeError(
+#             f"Failed to intersect databases '{input_db1.path}' and '{input_db2.path}'."
+#         ) from e
+#     return load_database(output_db_path)
+
+
+# def filter_database(input_db: KMCDatabase, output_db_path: str, min_count: int):
+#     try:
+#         subprocess.run(
+#             [
+#                 "kmc_tools",
+#                 HIDE_PROGRESS_FLAG,
+#                 "transform",
+#                 input_db.path,
+#                 f"-ci{min_count}",
+#                 "reduce",
+#                 output_db_path,
+#             ],
+#             check=True,
+#         )
+#     except Exception as e:
+#         raise RuntimeError(f"Failed to filter database '{input_db.path}'.") from e
+#     return load_database(output_db_path)
 
 
 class KMCHelper:
@@ -139,12 +221,12 @@ class KMCHelper:
             raise ValueError("num_threads must be positive")
         self._num_threads = min(value, 128)
 
-    def _count_kmers(self, read: str, output_db: str):
+    def _count_kmers(self, read: str, output_db_path: str):
         if not os.path.exists(read):
             raise FileNotFoundError(read)
         with (
             TemporaryDirectory() as temporary_directory,
-            open(f"{output_db}.log", "wb") as log_file,
+            open(f"{output_db_path}.log", "wb") as log_file,
         ):
             try:
                 subprocess.run(
@@ -157,7 +239,7 @@ class KMCHelper:
                         f"-ci{MINIMUM_COUNT}",
                         f"-cs{CLAMP_COUNT}",
                         read,
-                        output_db,
+                        output_db_path,
                         temporary_directory,
                     ],
                     stdout=log_file,
@@ -165,40 +247,34 @@ class KMCHelper:
                 )
             except Exception as e:
                 raise RuntimeError(f"Failed to count kmers in '{read}'") from e
+        return load_database(output_db_path)
 
-    def count_kmers_single_read(self, read: str, output_db: str):
+    def count_kmers_single_read(self, read: str, output_db_path: str):
         if self.threshold == 0.0:
-            self._count_kmers(read, output_db)
-            return
+            return self._count_kmers(read, output_db_path)
         with TemporaryDirectory() as temporary_directory:
-            db1 = os.path.join(temporary_directory, "1")
-            self._count_kmers(read, db1)
-            coverage = _estimate_coverage(db1)
-            min_count = math.ceil(self.threshold * coverage)
-            _filter_database(db1, output_db, min_count)
+            db1 = self._count_kmers(read, os.path.join(temporary_directory, "1"))
+            coverage = db1.estimate_coverage()
+            return db1.filter(self.threshold * coverage, output_db_path)
 
-    def count_kmers_paired_reads(self, read1: str, read2: str, output_db: str):
+    def count_kmers_paired_reads(self, read1: str, read2: str, output_db_path: str):
         with TemporaryDirectory() as temporary_directory:
-            db1 = os.path.join(temporary_directory, "1")
-            self._count_kmers(read1, db1)
-            db2 = os.path.join(temporary_directory, "2")
-            self._count_kmers(read2, db2)
+            db1 = self._count_kmers(read1, os.path.join(temporary_directory, "1"))
+            db2 = self._count_kmers(read2, os.path.join(temporary_directory, "2"))
             if self.threshold == 0.0:
-                _intersect_databases(db1, db2, output_db)
-                return
-            db_intersection = os.path.join(temporary_directory, "intersection")
-            _intersect_databases(db1, db2, db_intersection)
-            coverage = _estimate_coverage(db_intersection)
-            min_count = math.ceil(self.threshold * coverage)
-            _filter_database(db_intersection, output_db, min_count)
+                return db1.intersect(db2, output_db_path)
+            db_intersection = db1.intersect(
+                db2, os.path.join(temporary_directory, "intersection")
+            )
+            coverage = db_intersection.estimate_coverage()
+            return db_intersection.filter(self.threshold * coverage, output_db_path)
 
     def count_kmers(
-        self, *, read1: str, read2: typing.Optional[str] = None, output_db: str
+        self, *, read1: str, read2: typing.Optional[str] = None, output_db_path: str
     ):
         if read2 is None:
-            self.count_kmers_single_read(read1, output_db)
-        else:
-            self.count_kmers_paired_reads(read1, read2, output_db)
+            return self.count_kmers_single_read(read1, output_db_path)
+        return self.count_kmers_paired_reads(read1, read2, output_db_path)
 
 
 def main():
@@ -208,7 +284,7 @@ def main():
     parser.add_argument("-1", "--read1", required=True, help="First readset path")
     parser.add_argument("-2", "--read2", help="Second readset path (optional)")
     parser.add_argument(
-        "-o", "--output_db", required=True, help="Output KMC database path"
+        "-o", "--output_db_path", required=True, help="Output KMC database path"
     )
     parser.add_argument(
         "-k",
@@ -248,7 +324,9 @@ def main():
         max_memory=args.max_memory,
         num_threads=args.num_threads,
     )
-    helper.count_kmers(read1=args.read1, read2=args.read2, output_db=args.output_db)
+    helper.count_kmers(
+        read1=args.read1, read2=args.read2, output_db_path=args.output_db_path
+    )
 
 
 if __name__ == "__main__":
