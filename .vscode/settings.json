@@ -39,6 +39,7 @@
         "streambuf": "cpp",
         "typeinfo": "cpp",
         "algorithm": "cpp",
-        "ratio": "cpp"
+        "ratio": "cpp",
+        "__node_handle": "cpp"
     }
 }

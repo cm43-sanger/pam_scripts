@@ -32,6 +32,18 @@ static inline uint8_t encode_base(uint8_t base)
     }
 }
 
+static inline void update_forward_reverse_no_mask(uint64_t &forward, uint64_t &reverse,
+                                                  uint64_t base, uint8_t k)
+{
+    forward = (forward << 2) | base;
+    reverse = (reverse >> 2) | ((0b11ULL ^ base) << (2 * k - 2));
+}
+
+static inline uint64_t canonical_kmer(uint64_t forward, uint64_t reverse)
+{
+    return (forward > reverse) ? reverse : forward;
+}
+
 static inline std::vector<uint64_t> extract_kmers_destructive(
     kstring_t *seq, uint8_t k)
 {
@@ -42,34 +54,33 @@ static inline std::vector<uint64_t> extract_kmers_destructive(
     uint8_t *s = reinterpret_cast<uint8_t *>(seq->s);
     for (size_t i = 0; i < l; i++)
         s[i] = encode_base(s[i]);
-    int shift = 2 * (k - 1);
     uint64_t mask = (1ULL << (2 * k)) - 1;
-    uint64_t flip = 0b11;
-    for (size_t stop = 0; stop < l; stop++)
-    { // extra increment of stop skips invalid bases
+    size_t stop = 0;
+    size_t first_invalid_start = l - k + 1;
+    do
+    {
         size_t start = stop;
-        for (; (stop < l) && (s[stop] != UINT8_MAX); stop++)
-        {
-        }
+        while ((start < first_invalid_start) && (s[start] == UINT8_MAX))
+            ++start;
+        if (start == first_invalid_start)
+            return kmers;
+        stop = start;
+        while ((stop < l) && (s[stop] != UINT8_MAX))
+            ++stop;
         if ((stop - start) < k)
             continue;
         size_t i = start;
         uint64_t forward = 0, reverse = 0;
         for (; i < start + k; i++)
-        {
-            uint64_t base = s[i];
-            forward = (forward << 2) | base;
-            reverse = (reverse >> 2) | ((flip ^ base) << shift);
-        }
-        kmers.push_back(forward < reverse ? forward : reverse);
+            update_forward_reverse_no_mask(forward, reverse, s[i], k);
+        kmers.push_back(canonical_kmer(forward, reverse));
         for (; i < stop; i++)
         {
-            uint64_t base = s[i];
-            forward = mask & ((forward << 2) | base);
-            reverse = (reverse >> 2) | ((flip ^ base) << shift);
-            kmers.push_back(forward < reverse ? forward : reverse);
+            update_forward_reverse_no_mask(forward, reverse, s[i], k);
+            forward &= mask;
+            kmers.push_back(canonical_kmer(forward, reverse));
         }
-    }
+    } while (stop < first_invalid_start);
     return kmers;
 }
 
