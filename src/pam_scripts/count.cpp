@@ -45,8 +45,29 @@ static inline uint64_t canonical_kmer(uint64_t forward, uint64_t reverse)
     return (forward > reverse) ? reverse : forward;
 }
 
+template <typename CounterType>
+static inline void increment_saturating(CounterType &counter, uint64_t key)
+{
+    auto result = counter.try_emplace(key, 1);
+    bool inserted = result.second;
+    if (!inserted)
+    {
+        counter.modify_if(key, [](typename CounterType::value_type &kv)
+                          {
+            if (kv.second != std::numeric_limits<typename CounterType::mapped_type>::max())
+                ++kv.second; });
+    }
+}
+
 static inline std::vector<uint64_t> extract_kmers_destructive(
-    kstring_t *seq, uint8_t k)
+    kstring_t *seq,
+    uint8_t k,
+    phmap::parallel_flat_hash_map<
+        uint64_t, uint16_t,
+        std::hash<uint64_t>, std::equal_to<uint64_t>,
+        std::allocator<std::pair<const uint64_t, uint16_t>>,
+        4, // 2^N submaps for concurrency
+        std::mutex> &counter)
 {
     std::vector<uint64_t> kmers;
     size_t l = seq->l;
@@ -75,12 +96,14 @@ static inline std::vector<uint64_t> extract_kmers_destructive(
         uint64_t forward = 0, reverse = 0;
         for (; i < start + k; i++)
             update_forward_reverse_no_mask(forward, reverse, s[i], k);
-        kmers.push_back(canonical_kmer(forward, reverse));
+        // kmers.push_back(canonical_kmer(forward, reverse));
+        increment_saturating(counter, canonical_kmer(forward, reverse));
         for (; i < stop; i++)
         {
             update_forward_reverse_no_mask(forward, reverse, s[i], k);
             forward &= mask;
-            kmers.push_back(canonical_kmer(forward, reverse));
+            // kmers.push_back(canonical_kmer(forward, reverse));
+            increment_saturating(counter, canonical_kmer(forward, reverse));
         }
     } while (next_start < first_invalid_start);
     return kmers;
@@ -98,29 +121,22 @@ static inline void worker_func(
     std::vector<kstring_t> &buckets,
     moodycamel::ConcurrentQueue<size_t> &filled_buckets,
     moodycamel::ConcurrentQueue<size_t> &free_buckets,
+    phmap::parallel_flat_hash_map<
+        uint64_t, uint16_t,
+        std::hash<uint64_t>, std::equal_to<uint64_t>,
+        std::allocator<std::pair<const uint64_t, uint16_t>>,
+        4, // 2^N submaps for concurrency
+        std::mutex> &counter,
     uint8_t k)
 {
     while (true)
     {
-        size_t i = get_next_bucket(filled_buckets);                              // get filled bucket
-        if (buckets[i].l == 0)                                                   // if received done signal
-            return;                                                              // then exit
-        std::vector<uint64_t> kmers = extract_kmers_destructive(&buckets[i], k); // otherwise get kmers
-        free_buckets.enqueue(i);                                                 // then return empty bucket
-    }
-}
-
-template <typename MapType>
-static inline void increment_saturating(MapType &map, uint64_t key)
-{
-    auto result = map.try_emplace(key, 1);
-    bool inserted = result.second;
-    if (!inserted)
-    {
-        map.modify_if(key, [](typename MapType::value_type &kv)
-                      {
-            if (kv.second != std::numeric_limits<typename MapType::mapped_type>::max())
-                ++kv.second; });
+        size_t i = get_next_bucket(filled_buckets);              // get filled bucket
+        if (buckets[i].l == 0)                                   // if received done signal
+            return;                                              // then exit
+        std::vector<uint64_t> kmers = extract_kmers_destructive( // otherwise get kmers
+            &buckets[i], k, counter);                            //
+        free_buckets.enqueue(i);                                 // then return empty bucket
     }
 }
 
@@ -147,40 +163,40 @@ int main(int argc, char **argv)
         uint64_t, uint16_t,
         std::hash<uint64_t>, std::equal_to<uint64_t>,
         std::allocator<std::pair<const uint64_t, uint16_t>>,
-        4 // 2^N submaps for concurrency
-        >
+        4, // 2^N submaps for concurrency
+        std::mutex>
         counter;
 
-    std::fprintf(stderr, "Step 1\n");
-    for (auto &kv : counter)
-    {
-        uint64_t key = kv.first;
-        uint16_t value = kv.second;
-        std::fprintf(stderr, "Key: %llu, Count: %u\n", key, value);
-    }
+    // std::fprintf(stderr, "Step 1\n");
+    // for (auto &kv : counter)
+    // {
+    //     uint64_t key = kv.first;
+    //     uint16_t value = kv.second;
+    //     std::fprintf(stderr, "Key: %llu, Count: %u\n", key, value);
+    // }
 
-    increment_saturating(counter, 1);
+    // increment_saturating(counter, 1);
 
-    std::fprintf(stderr, "Step 2\n");
-    for (auto &kv : counter)
-    {
-        uint64_t key = kv.first;
-        uint16_t value = kv.second;
-        std::fprintf(stderr, "Key: %llu, Count: %u\n", key, value);
-    }
+    // std::fprintf(stderr, "Step 2\n");
+    // for (auto &kv : counter)
+    // {
+    //     uint64_t key = kv.first;
+    //     uint16_t value = kv.second;
+    //     std::fprintf(stderr, "Key: %llu, Count: %u\n", key, value);
+    // }
 
-    increment_saturating(counter, 1);
-    increment_saturating(counter, 2);
-    increment_saturating(counter, 1);
-    increment_saturating(counter, 3);
+    // increment_saturating(counter, 1);
+    // increment_saturating(counter, 2);
+    // increment_saturating(counter, 1);
+    // increment_saturating(counter, 3);
 
-    std::fprintf(stderr, "Step 3\n");
-    for (auto &kv : counter)
-    {
-        uint64_t key = kv.first;
-        uint16_t value = kv.second;
-        std::fprintf(stderr, "Key: %llu, Count: %u\n", key, value);
-    }
+    // std::fprintf(stderr, "Step 3\n");
+    // for (auto &kv : counter)
+    // {
+    //     uint64_t key = kv.first;
+    //     uint16_t value = kv.second;
+    //     std::fprintf(stderr, "Key: %llu, Count: %u\n", key, value);
+    // }
 
     // counter.modify_if
     uint16_t x = 1U;
@@ -199,6 +215,7 @@ int main(int argc, char **argv)
                              std::ref(buckets),
                              std::ref(filled_buckets),
                              std::ref(free_buckets),
+                             std::ref(counter),
                              k);
 
     kseq_t *ks = kseq_init(fp);
@@ -237,5 +254,14 @@ int main(int argc, char **argv)
     ks->seq.s = NULL; // pointer has already been freed
     kseq_destroy(ks);
     gzclose(fp);
+
+    // std::fprintf(stderr, "Step 1\n");
+    // for (auto &kv : counter)
+    // {
+    //     uint64_t key = kv.first;
+    //     uint16_t value = kv.second;
+    //     std::fprintf(stderr, "Key: %llu, Count: %u\n", key, value);
+    // }
+
     return 0;
 }
