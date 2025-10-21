@@ -20,7 +20,7 @@ static inline uint64_t hash_u64(uint64_t x, uint64_t seed = 42)
 static inline void hash_buf(
     const uint64_t *input, uint64_t *output, size_t n, uint64_t seed, unsigned int num_threads)
 {
-    num_threads = std::min<size_t>(num_threads, n / 1000);
+    num_threads = std::min<size_t>(num_threads, n / 1024);
     if (num_threads < 2)
     {
         for (size_t i = 0; i < n; i++)
