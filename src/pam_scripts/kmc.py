@@ -112,50 +112,6 @@ def load_database(db_path: str):
         return KMCDatabase(db_path, *_kmc.get_info(db_path))
 
 
-# def intersect_databases(
-#     input_db1: KMCDatabase, input_db2: KMCDatabase, output_db_path: str
-# ):
-#     if input_db1.kmer_length != input_db2.kmer_length:
-#         raise ValueError
-#     try:
-#         subprocess.run(
-#             [
-#                 "kmc_tools",
-#                 HIDE_PROGRESS_FLAG,
-#                 "simple",
-#                 input_db1.path,
-#                 input_db2.path,
-#                 "intersect",
-#                 output_db_path,
-#             ],
-#             check=True,
-#         )
-#     except Exception as e:
-#         raise RuntimeError(
-#             f"Failed to intersect databases '{input_db1.path}' and '{input_db2.path}'."
-#         ) from e
-#     return load_database(output_db_path)
-
-
-# def filter_database(input_db: KMCDatabase, output_db_path: str, min_count: int):
-#     try:
-#         subprocess.run(
-#             [
-#                 "kmc_tools",
-#                 HIDE_PROGRESS_FLAG,
-#                 "transform",
-#                 input_db.path,
-#                 f"-ci{min_count}",
-#                 "reduce",
-#                 output_db_path,
-#             ],
-#             check=True,
-#         )
-#     except Exception as e:
-#         raise RuntimeError(f"Failed to filter database '{input_db.path}'.") from e
-#     return load_database(output_db_path)
-
-
 class KMCHelper:
     _kmer_length: int
     _threshold: float
