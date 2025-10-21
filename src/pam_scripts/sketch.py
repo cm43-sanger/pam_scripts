@@ -1,4 +1,4 @@
-from . import _kmc, kmers
+from . import kmc, kmers, xxhash
 
 import argparse
 import math
@@ -16,6 +16,77 @@ from collections.abc import Sequence
 from numba import njit, prange
 from tempfile import TemporaryDirectory
 from tqdm import tqdm as make_progressbar
+
+DEFAULT_THRESHOLD = 0.05
+DEFAULT_SEED = 42
+UINT64_MAX = 2**64 - 1
+
+
+class SketchHelper(kmc.KMCHelper):
+    _scale: typing.Optional[int]
+    _seed: int
+
+    def __init__(
+        self,
+        kmer_length: int = kmc.DEFAULT_KMER_LENGTH,
+        threshold: float = DEFAULT_THRESHOLD,
+        scale: typing.Optional[int] = None,
+        seed: int = DEFAULT_SEED,
+        max_memory: typing.Optional[float] = None,
+        num_threads: typing.Optional[int] = None,
+    ):
+        self.kmer_length = kmer_length
+        self.threshold = threshold
+        self.scale = scale
+        self.seed = seed
+        self.max_memory = max_memory
+        self.num_threads = num_threads
+
+    @property
+    def scale(self):
+        return self.kmer_length if self._scale is None else self._scale
+
+    @scale.setter
+    def scale(self, value: typing.Optional[int] = None):
+        if value is not None:
+            try:
+                value = int(value)
+                assert value > 0
+            except:
+                raise ValueError(f"scale must be a positive integer (got {value})")
+        self._scale = value
+
+    @property
+    def seed(self):
+        return self._seed
+
+    @seed.setter
+    def seed(self, value: int):
+        try:
+            value = int(value)
+            assert value > 0 and value <= UINT64_MAX
+        except:
+            raise ValueError(
+                f"seed must be an integer in range [1, 2^64-1] (got {value})"
+            )
+        self._seed = value
+
+    def sketch(
+        self, read1: str, read2: str
+    ) -> np.ndarray[tuple[int], np.dtype[np.uint64]]:
+        with TemporaryDirectory() as temporary_directory:
+            db_path = os.path.join(temporary_directory, "counts")
+            db = self.count_kmers_paired_reads(read1, read2, db_path)
+            kmers = db.load_kmers()
+        if self.scale != 1:
+            hashes = xxhash.hash_kmers(
+                kmers, seed=self.seed, num_threads=self.num_threads
+            )
+            max_count = UINT64_MAX // self.scale
+            passed = hashes < (max_count + 1)
+            kmers = kmers[passed]
+        kmers.sort()
+        return kmers
 
 
 def load_manifest(manifest: str):

@@ -136,11 +136,17 @@ class KMCHelper:
 
     @kmer_length.setter
     def kmer_length(self, value: int):
-        value = int(value)
-        if value % 2 == 0 or value < MINIMUM_KMER_LENGTH or value > MAXIMUM_KMER_LENGTH:
+        try:
+            value = int(value)
+            assert (
+                value % 2
+                and value >= MINIMUM_KMER_LENGTH
+                and value <= MAXIMUM_KMER_LENGTH
+            )
+        except:
             raise ValueError(
-                "kmer_length must be odd and in range "
-                f"[{MINIMUM_KMER_LENGTH}, {MAXIMUM_KMER_LENGTH}]"
+                "kmer_length must be a positive, odd integer in range "
+                f"[{MINIMUM_KMER_LENGTH}, {MAXIMUM_KMER_LENGTH}] (got {value})"
             )
         self._kmer_length = value
 
@@ -150,9 +156,11 @@ class KMCHelper:
 
     @threshold.setter
     def threshold(self, value: float):
-        value = float(value)
-        if value < 0.0:
-            raise ValueError("threshold must be positive")
+        try:
+            value = float(value)
+            assert value >= 0.0
+        except:
+            raise ValueError(f"threshold must be positive (got {value})")
         self._threshold = value
 
     @property
@@ -161,9 +169,13 @@ class KMCHelper:
 
     @max_memory.setter
     def max_memory(self, value: typing.Optional[float]):
-        value = MINIMUM_MAX_MEMORY if value is None else float(value)
-        if value < MINIMUM_MAX_MEMORY:
-            raise ValueError(f"max_memory must be at least {MINIMUM_MAX_MEMORY} GB")
+        try:
+            value = MINIMUM_MAX_MEMORY if value is None else float(value)
+            assert value >= MINIMUM_MAX_MEMORY
+        except:
+            raise ValueError(
+                f"max_memory must be at least {MINIMUM_MAX_MEMORY} GB (got {value})"
+            )
         self._max_memory = min(value, MAXIMUM_MAX_MEMORY)
 
     @property
@@ -172,9 +184,11 @@ class KMCHelper:
 
     @num_threads.setter
     def num_threads(self, value: typing.Optional[int]):
-        value = NUM_CPUS if value is None else int(value)
-        if value < 1:
-            raise ValueError("num_threads must be positive")
+        try:
+            value = NUM_CPUS if value is None else int(value)
+            assert value > 0
+        except:
+            raise ValueError(f"num_threads must be a positive integer (got {value})")
         self._num_threads = min(value, 128)
 
     def _count_kmers(self, read: str, output_db_path: str):

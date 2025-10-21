@@ -5,15 +5,21 @@ import pybind11
 import sys
 
 # --- Compile flags ---
-extra_compile_args_cpp = ["-O3", "-std=c++17"]
-extra_compile_args_cython = ["-O3"]
+extra_compile_args_cpp = [
+    "-O3",
+    "-std=c++17",
+    "-march=native",
+    "-Rpass=loop-vectorize",
+    "-Rpass-missed=loop-vectorize",
+]
+extra_compile_args_cython = ["-O3", "-march=native"]
 
 if sys.platform == "win32":
     extra_compile_args_cpp = ["/O2", "/std:c++17"]
     extra_compile_args_cython = ["/O2"]
 
 # --- C++ pybind11 extension ---
-kmers_ext = Extension(
+kc_ext = Extension(
     "pam_scripts._kmc",
     sources=[
         "src/pam_scripts/_kmc.cpp",
@@ -21,6 +27,13 @@ kmers_ext = Extension(
         "src/pam_scripts/kmc_api/kmer_api.cpp",
         "src/pam_scripts/kmc_api/mmer.cpp",
     ],
+    include_dirs=[pybind11.get_include(), "src/pam_scripts/kmc_api"],
+    language="c++",
+    extra_compile_args=extra_compile_args_cpp,
+)
+hash_ext = Extension(
+    "pam_scripts._xxhash",
+    sources=["src/pam_scripts/_xxhash.cpp"],
     include_dirs=[pybind11.get_include(), "src/pam_scripts/kmc_api"],
     language="c++",
     extra_compile_args=extra_compile_args_cpp,
@@ -33,6 +46,22 @@ jaccard_ext = Extension(
     include_dirs=[numpy.get_include()],
     extra_compile_args=extra_compile_args_cython,
 )
+# xxhash_ext = Extension(
+#     "pam_scripts._xxhash",
+#     sources=["src/pam_scripts/xxhash.pyx"],
+#     include_dirs=[numpy.get_include()],
+#     extra_compile_args=extra_compile_args_cython,
+# )
+
+# setup(
+#     name="pam_scripts",
+#     ext_modules=cythonize(
+#         [jaccard_ext, xxhash_ext],  # only Cython modules go through cythonize
+#         compiler_directives={"language_level": "3"},
+#         annotate=True,
+#     )
+#     + [kc_ext],  # add the C++ extensions directly
+# )
 
 setup(
     name="pam_scripts",
@@ -41,5 +70,5 @@ setup(
         compiler_directives={"language_level": "3"},
         annotate=True,
     )
-    + [kmers_ext],  # add the C++ extensions directly
+    + [kc_ext, hash_ext],  # add the C++ extensions directly
 )
