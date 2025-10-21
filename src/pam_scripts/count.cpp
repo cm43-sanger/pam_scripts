@@ -85,26 +85,27 @@ static inline std::vector<uint64_t> extract_kmers_destructive(
     return kmers;
 }
 
+static inline size_t get_next_bucket(moodycamel::ConcurrentQueue<size_t> &buckets)
+{
+    size_t i;
+    while (!buckets.try_dequeue(i)) // try getting filled bucket
+        std::this_thread::yield();  // otherwise wait for new items
+    return i;
+}
+
 static inline void worker_func(
     std::vector<kstring_t> &buckets,
     moodycamel::ConcurrentQueue<size_t> &filled_buckets,
     moodycamel::ConcurrentQueue<size_t> &free_buckets,
-    std::atomic<bool> &done,
     uint8_t k)
 {
-    // change to poison pill
-    size_t i;
     while (true)
     {
-        if (filled_buckets.try_dequeue(i))
-        {
-            std::vector<uint64_t> kmers = extract_kmers_destructive(&buckets[i], k);
-            free_buckets.enqueue(i);
-        }
-        else if (done.load())
-            break; // no more work coming
-        else
-            std::this_thread::yield(); // wait for new items
+        size_t i = get_next_bucket(filled_buckets);                              // get filled bucket
+        if (buckets[i].l == 0)                                                   // if received done signal
+            return;                                                              // then exit
+        std::vector<uint64_t> kmers = extract_kmers_destructive(&buckets[i], k); // otherwise get kmers
+        free_buckets.enqueue(i);                                                 // then return empty bucket
     }
 }
 
@@ -121,8 +122,8 @@ int main(int argc, char **argv)
     if (!fp)
         return 1;
 
-    const size_t num_buckets = 128;
     const size_t num_threads = std::thread::hardware_concurrency();
+    const size_t num_buckets = 6 * num_threads;
     const uint8_t k = 31;
     std::fprintf(stderr, "Total threads: %zu\n", num_threads);
 
@@ -140,28 +141,34 @@ int main(int argc, char **argv)
                              std::ref(buckets),
                              std::ref(filled_buckets),
                              std::ref(free_buckets),
-                             std::ref(done),
                              k);
 
     kseq_t *ks = kseq_init(fp);
     size_t count = 0;
-    while (1)
+    size_t i;
+    while (true)
     {
-        size_t i;
-        if (!free_buckets.try_dequeue(i)) // No free bucket available, wait
-        {
-            std::this_thread::yield();
-            continue;
-        }
+        i = get_next_bucket(free_buckets); // get free bucket
         ks->seq = buckets[i];
-        if (kseq_read(ks) < 0)
-            break;
+        int l;
+        while ((l = kseq_read(ks)) == 0) // skip empty reads
+            ;
         buckets[i] = ks->seq;
+        if (l < 0) // finished
+            break;
         filled_buckets.enqueue(i);
         ++count;
     }
 
-    done.store(true);
+    // cleanup workers
+    buckets[i].l = 0;          // send stop signal to first thread
+    filled_buckets.enqueue(i); //
+    for (size_t t = 1; t < num_threads; t++)
+    {
+        i = get_next_bucket(free_buckets); // get free bucket
+        buckets[i].l = 0;                  // send stop signal to other threads
+        filled_buckets.enqueue(i);         //
+    }
     for (std::thread &w : workers)
         w.join();
 
