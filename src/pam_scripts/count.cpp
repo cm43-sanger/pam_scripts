@@ -8,6 +8,7 @@
 #include <atomic>
 #include "kseq.h"
 #include "concurrentqueue.h"
+#include "parallel_hashmap/phmap.h"
 
 KSEQ_INIT(gzFile, gzread)
 
@@ -109,6 +110,20 @@ static inline void worker_func(
     }
 }
 
+template <typename MapType>
+static inline void increment_saturating(MapType &map, uint64_t key)
+{
+    auto result = map.try_emplace(key, 1);
+    bool inserted = result.second;
+    if (!inserted)
+    {
+        map.modify_if(key, [](typename MapType::value_type &kv)
+                      {
+            if (kv.second != std::numeric_limits<typename MapType::mapped_type>::max())
+                ++kv.second; });
+    }
+}
+
 int main(int argc, char **argv)
 {
     if (argc < 2)
@@ -126,6 +141,49 @@ int main(int argc, char **argv)
     const size_t num_buckets = 6 * num_threads;
     const uint8_t k = 31;
     std::fprintf(stderr, "Total threads: %zu\n", num_threads);
+
+    // Create a parallel hash map with 8 shards
+    phmap::parallel_flat_hash_map<
+        uint64_t, uint16_t,
+        std::hash<uint64_t>, std::equal_to<uint64_t>,
+        std::allocator<std::pair<const uint64_t, uint16_t>>,
+        4 // 2^N submaps for concurrency
+        >
+        counter;
+
+    std::fprintf(stderr, "Step 1\n");
+    for (auto &kv : counter)
+    {
+        uint64_t key = kv.first;
+        uint16_t value = kv.second;
+        std::fprintf(stderr, "Key: %llu, Count: %u\n", key, value);
+    }
+
+    increment_saturating(counter, 1);
+
+    std::fprintf(stderr, "Step 2\n");
+    for (auto &kv : counter)
+    {
+        uint64_t key = kv.first;
+        uint16_t value = kv.second;
+        std::fprintf(stderr, "Key: %llu, Count: %u\n", key, value);
+    }
+
+    increment_saturating(counter, 1);
+    increment_saturating(counter, 2);
+    increment_saturating(counter, 1);
+    increment_saturating(counter, 3);
+
+    std::fprintf(stderr, "Step 3\n");
+    for (auto &kv : counter)
+    {
+        uint64_t key = kv.first;
+        uint16_t value = kv.second;
+        std::fprintf(stderr, "Key: %llu, Count: %u\n", key, value);
+    }
+
+    // counter.modify_if
+    uint16_t x = 1U;
 
     std::vector<kstring_t> buckets(num_buckets, kstring_t{0, 0, nullptr});
     moodycamel::ConcurrentQueue<size_t> free_buckets;
