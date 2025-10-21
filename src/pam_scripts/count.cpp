@@ -55,18 +55,19 @@ static inline std::vector<uint64_t> extract_kmers_destructive(
     for (size_t i = 0; i < l; i++)
         s[i] = encode_base(s[i]);
     uint64_t mask = (1ULL << (2 * k)) - 1;
-    size_t stop = 0;
+    size_t next_start = 0;
     size_t first_invalid_start = l - k + 1;
     do
     {
-        size_t start = stop;
-        while ((start < first_invalid_start) && (s[start] == UINT8_MAX))
-            ++start;
-        if (start == first_invalid_start)
+        while ((next_start < first_invalid_start) && (s[next_start] == UINT8_MAX))
+            ++next_start;
+        if (next_start == first_invalid_start)
             return kmers;
-        stop = start;
+        size_t stop = next_start;
         while ((stop < l) && (s[stop] != UINT8_MAX))
             ++stop;
+        size_t start = next_start;
+        next_start = stop + 1; // skip non-base character if unfinished (doesn't matter if finished)
         if ((stop - start) < k)
             continue;
         size_t i = start;
@@ -80,7 +81,7 @@ static inline std::vector<uint64_t> extract_kmers_destructive(
             forward &= mask;
             kmers.push_back(canonical_kmer(forward, reverse));
         }
-    } while (stop < first_invalid_start);
+    } while (next_start < first_invalid_start);
     return kmers;
 }
 
@@ -91,6 +92,7 @@ static inline void worker_func(
     std::atomic<bool> &done,
     uint8_t k)
 {
+    // change to poison pill
     size_t i;
     while (true)
     {
