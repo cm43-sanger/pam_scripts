@@ -20,24 +20,14 @@ static inline uint64_t hash_u64(uint64_t x, uint64_t seed = 42)
 static inline void hash_buf(
     const uint64_t *input, uint64_t *output, size_t n, uint64_t seed, unsigned int num_threads)
 {
-    if ((num_threads < 2) || (n < 1000))
+    num_threads = std::min<size_t>(num_threads, n / 1000);
+    if (num_threads < 2)
     {
         for (size_t i = 0; i < n; i++)
             output[i] = hash_u64(input[i], seed);
         return;
     }
     std::vector<std::thread> threads(num_threads);
-    // size_t chunk_size = (n - 1) / num_threads + 1;
-    // for (unsigned int t = 0; t < num_threads; t++)
-    // {
-    //     size_t start = t * chunk_size;
-    //     size_t end = std::min(start + chunk_size, n);
-    //     threads[t] = std::thread([input, output, seed, start, end]()
-    //                              {
-    //         for (size_t i = start; i < end; i++) {
-    //             output[i] = hash_u64(input[i], seed);
-    //         } });
-    // }
     size_t base_size = n / num_threads;
     size_t remainder = n % num_threads; // extra elements to distribute
     size_t start = 0;
