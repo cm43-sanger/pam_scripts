@@ -21,7 +21,7 @@ from dataclasses import dataclass
 from tempfile import TemporaryDirectory
 
 NUM_CPUS = os.cpu_count() or 1
-DEFAULT_KMER_LENGTH = 21
+DEFAULT_KMER_LENGTH = 25
 MINIMUM_KMER_LENGTH = 1
 MAXIMUM_KMER_LENGTH = 31
 MINIMUM_MAX_MEMORY = 2.0
@@ -265,7 +265,7 @@ def main():
         f">={MINIMUM_KMER_LENGTH}, <={MAXIMUM_KMER_LENGTH})",
     )
     parser.add_argument(
-        "-f",
+        "-c",
         "--threshold",
         type=float,
         default=0.0,

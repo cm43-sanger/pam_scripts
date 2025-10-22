@@ -359,47 +359,97 @@ def sketch_from_manifest(
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Generate kmer sketches from a manifest of read sets."
+        description="Generate kmer sketches from a manifest of read sets"
     )
     parser.add_argument(
         "manifest",
-        help="Path to the manifest file listing input read sets (TSV format)",
+        help="Path to the manifest file with columns for name, read1 and read2 "
+        "(tab-separated, no header, names must be unique)",
     )
     parser.add_argument(
-        "directory", help="Output directory to store the generated sketches"
+        "output_directory", help="Output directory to store the generated sketches"
     )
     parser.add_argument(
-        "--kmer-length",
         "-k",
+        "--kmer_length",
         type=int,
-        default=21,
-        help="K-mer length to use for sketching (default: 21)",
+        default=kmc.DEFAULT_KMER_LENGTH,
+        help=f"Kmer length (default {kmc.DEFAULT_KMER_LENGTH}, odd, "
+        f">={kmc.MINIMUM_KMER_LENGTH}, <={kmc.MAXIMUM_KMER_LENGTH})",
     )
     parser.add_argument(
-        "--num-jobs",
-        "-j",
+        "-c",
+        "--threshold",
+        type=float,
+        default=DEFAULT_THRESHOLD,
+        help="Filter kmers with counts below threshold * mean (default "
+        f"{DEFAULT_THRESHOLD})",
+    )
+    parser.add_argument(
+        "-s",
+        "--scale",
         type=int,
         default=None,
-        help="Number of parallel jobs (default: auto)",
+        help="Downsampling scale factor (default: kmer_length)",
     )
     parser.add_argument(
-        "--num-kmc-threads",
+        "-d",
+        "--seed",
+        type=int,
+        default=DEFAULT_SEED,
+        help=f"Deterministic seed for hash function (default {DEFAULT_SEED})",
+    )
+    parser.add_argument(
+        "-m",
+        "--max_memory",
+        type=float,
+        default=kmc.MINIMUM_MAX_MEMORY,
+        help=f"Max amount of RAM in GB (default {kmc.MINIMUM_MAX_MEMORY}, "
+        f">={kmc.MINIMUM_MAX_MEMORY})",
+    )
+    parser.add_argument(
         "-t",
+        "--num_threads",
         type=int,
-        default=None,
-        help="Threads per job for KMC (default: auto)",
+        default=kmc.NUM_CPUS,
+        help=f"Total number of threads (default {kmc.NUM_CPUS})",
     )
     parser.add_argument(
-        "--verbose", "-v", action="store_true", help="Enable verbose progress output"
+        "-j",
+        "--num-jobs",
+        type=int,
+        default=1,
+        help="Number of parallel jobs (default: 1)",
+    )
+    parser.add_argument(
+        "-z",
+        "--compression_level",
+        type=int,
+        default=4,
+        choices=range(1, 10),
+        metavar="[1-9]",
+        help="Gzip compression level for HDF5 sketches (1-9, default 4)",
+    )
+    parser.add_argument(
+        "-f", "--exist_ok", action="store_true", help="Wipe existing directory"
+    )
+    parser.add_argument(
+        "-v", "--verbose", action="store_true", help="Enable verbose progress output"
     )
     args = parser.parse_args()
 
     sketch_from_manifest(
         args.manifest,
-        args.directory,
+        args.output_directory,
         kmer_length=args.kmer_length,
+        threshold=args.threshold,
+        scale=args.scale,
+        seed=args.seed,
+        max_memory=args.max_memory,
+        num_threads=args.num_threads,
         num_jobs=args.num_jobs,
-        num_kmc_threads=args.num_kmc_threads,
+        compression_level=args.compression_level,
+        exist_ok=args.exist_ok,
         verbose=args.verbose,
     )
 
