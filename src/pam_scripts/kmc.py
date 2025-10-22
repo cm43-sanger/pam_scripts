@@ -219,15 +219,15 @@ class KMCHelper:
                 raise RuntimeError(f"Failed to count kmers in '{read}'") from e
         return load_database(output_db_path)
 
-    def count_kmers_single_read(self, read: str, output_db_path: str):
-        if self.threshold == 0.0:
-            return self._count_kmers(read, output_db_path)
-        with TemporaryDirectory() as temporary_directory:
-            db1 = self._count_kmers(read, os.path.join(temporary_directory, "1"))
-            coverage = db1.estimate_coverage()
-            return db1.filter(self.threshold * coverage, output_db_path)
+    # def count_kmers_single_read(self, read: str, output_db_path: str):
+    #     if self.threshold == 0.0:
+    #         return self._count_kmers(read, output_db_path)
+    #     with TemporaryDirectory() as temporary_directory:
+    #         db1 = self._count_kmers(read, os.path.join(temporary_directory, "1"))
+    #         coverage = db1.estimate_coverage()
+    #         return db1.filter(self.threshold * coverage, output_db_path)
 
-    def count_kmers_paired_reads(self, read1: str, read2: str, output_db_path: str):
+    def count_reads(self, read1: str, read2: str, output_db_path: str):
         with TemporaryDirectory() as temporary_directory:
             db1 = self._count_kmers(read1, os.path.join(temporary_directory, "1"))
             db2 = self._count_kmers(read2, os.path.join(temporary_directory, "2"))
@@ -239,12 +239,12 @@ class KMCHelper:
             coverage = db_intersection.estimate_coverage()
             return db_intersection.filter(self.threshold * coverage, output_db_path)
 
-    def count_kmers(
-        self, *, read1: str, read2: typing.Optional[str] = None, output_db_path: str
-    ):
-        if read2 is None:
-            return self.count_kmers_single_read(read1, output_db_path)
-        return self.count_kmers_paired_reads(read1, read2, output_db_path)
+    # def count_kmers(
+    #     self, *, read1: str, read2: typing.Optional[str] = None, output_db_path: str
+    # ):
+    #     if read2 is None:
+    #         return self.count_kmers_single_read(read1, output_db_path)
+    #     return self.count_kmers_paired_reads(read1, read2, output_db_path)
 
 
 def main():
