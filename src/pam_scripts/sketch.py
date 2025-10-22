@@ -151,15 +151,17 @@ def __sketch_from_manifest_worker_func(samples: tuple[str, str, str]):
     return (name, read1, read2, sketch)
 
 
-class ResolvedThreads(typing.NamedTuple):
+class ResolvedArguments(typing.NamedTuple):
     num_threads: int
     num_jobs: int
     num_job_threads: int
+    compression_level: int
 
 
-def resolve_threads(
+def resolve_arguments(
     num_threads: typing.Optional[int] = None,
     num_jobs: typing.Optional[int] = None,
+    compression_level: int = 4,
 ):
     try:
         num_threads = kmc.NUM_CPUS if num_threads is None else int(num_threads)
@@ -173,8 +175,18 @@ def resolve_threads(
         raise ValueError(f"num_jobs must be a positive integer (got {num_jobs})")
     num_jobs = min(num_jobs, num_threads)
     num_job_threads = (num_threads - 1) // num_jobs + 1
-    return ResolvedThreads(
-        num_threads=num_threads, num_jobs=num_jobs, num_job_threads=num_job_threads
+    try:
+        compression_level = int(compression_level)
+        assert compression_level > 0 and compression_level < 10
+    except:
+        raise ValueError(
+            f"compression_level must be an integer in range [1, 9] (got {num_jobs})"
+        )
+    return ResolvedArguments(
+        num_threads=num_threads,
+        num_jobs=num_jobs,
+        num_job_threads=num_job_threads,
+        compression_level=compression_level,
     )
 
 
@@ -188,23 +200,26 @@ def sketch_from_manifest(
     max_memory: typing.Optional[float] = None,
     num_threads: typing.Optional[int] = None,
     num_jobs: typing.Optional[int] = None,
+    compression_level: int = 4,
     exist_ok: bool = False,
     verbose: bool = False,
 ):
-    resolved_threads = resolve_threads(num_threads=num_threads, num_jobs=num_jobs)
+    args = resolve_arguments(
+        num_threads=num_threads, num_jobs=num_jobs, compression_level=compression_level
+    )
     helper = SketchHelper(
         kmer_length=kmer_length,
         threshold=threshold,
         scale=scale,
         seed=seed,
         max_memory=max_memory,
-        num_threads=resolved_threads.num_job_threads,
+        num_threads=args.num_job_threads,
     )
     samples = load_manifest(manifest)
     if verbose:
         print(
             f"Sketching {len(samples)} paired-end reads from {manifest!r} "
-            f"to {output_directory!r} with {resolved_threads.num_jobs} jobs, "
+            f"to {output_directory!r} with {args.num_jobs} jobs, "
             f"each with {helper.num_threads} threads.",
             file=sys.stderr,
         )
@@ -239,7 +254,13 @@ def sketch_from_manifest(
             num_failures += not success
             print(name, read1, read2, success, sep="\t", file=tsv_fp)
             if success:
-                h5_fp.create_dataset(name, data=kmers, compression="gzip")
+                h5_fp.create_dataset(
+                    name,
+                    data=kmers,
+                    compression="gzip",
+                    compression_opts=args.compression_level,
+                    shuffle=True,  # transpose bytes for better compression
+                )
             progressbar.set_postfix({"failures": num_failures})
             progressbar.update()
     return len(samples) - num_failures
