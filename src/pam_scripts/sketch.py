@@ -158,7 +158,7 @@ class ResolvedArguments(typing.NamedTuple):
     compression_level: int
 
 
-def resolve_arguments(
+def _resolve_arguments(
     num_threads: typing.Optional[int] = None,
     num_jobs: typing.Optional[int] = None,
     compression_level: int = 4,
@@ -204,7 +204,7 @@ def sketch_from_manifest(
     exist_ok: bool = False,
     verbose: bool = False,
 ):
-    args = resolve_arguments(
+    args = _resolve_arguments(
         num_threads=num_threads, num_jobs=num_jobs, compression_level=compression_level
     )
     helper = SketchHelper(
