@@ -28,18 +28,25 @@ kc_ext = Extension(
 hash_ext = Extension(
     "pam_scripts._xxhash",
     sources=["src/pam_scripts/_xxhash.cpp"],
-    include_dirs=[pybind11.get_include(), "src/pam_scripts/kmc_api"],
+    include_dirs=[pybind11.get_include()],
+    language="c++",
+    extra_compile_args=extra_compile_args_cpp,
+)
+jaccard_ext = Extension(
+    "pam_scripts._jaccard",
+    sources=["src/pam_scripts/_jaccard.cpp"],
+    include_dirs=[pybind11.get_include()],
     language="c++",
     extra_compile_args=extra_compile_args_cpp,
 )
 
 # --- Cython extension ---
-jaccard_ext = Extension(
-    "pam_scripts._jaccard_similarity",
-    sources=["src/pam_scripts/jaccard_similarity.pyx"],
-    include_dirs=[numpy.get_include()],
-    extra_compile_args=extra_compile_args_cython,
-)
+# jaccard_ext = Extension(
+#     "pam_scripts._jaccard_similarity",
+#     sources=["src/pam_scripts/jaccard_similarity.pyx"],
+#     include_dirs=[numpy.get_include()],
+#     extra_compile_args=extra_compile_args_cython,
+# )
 # xxhash_ext = Extension(
 #     "pam_scripts._xxhash",
 #     sources=["src/pam_scripts/xxhash.pyx"],
@@ -59,10 +66,11 @@ jaccard_ext = Extension(
 
 setup(
     name="pam_scripts",
-    ext_modules=cythonize(
-        [jaccard_ext],  # only Cython modules go through cythonize
-        compiler_directives={"language_level": "3"},
-        annotate=True,
-    )
-    + [kc_ext, hash_ext],  # add the C++ extensions directly
+    # ext_modules=cythonize(
+    #     [jaccard_ext],  # only Cython modules go through cythonize
+    #     compiler_directives={"language_level": "3"},
+    #     annotate=True,
+    # )
+    # + [kc_ext, hash_ext],  # add the C++ extensions directly
+    ext_modules=[kc_ext, hash_ext, jaccard_ext],
 )

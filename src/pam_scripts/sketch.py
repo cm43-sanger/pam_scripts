@@ -292,6 +292,17 @@ def sketch_from_manifest(
     return len(samples) - num_failures
 
 
+def load_sketches(path: str):
+    names = []
+    sketches = []
+    with h5py.File(path, "r") as f:
+        for name, data in f.items():
+            print(name)
+            names.append(name)
+            sketches.append(np.asarray(data[:], dtype=np.uint64))
+    return (names, sketches)
+
+
 # def __load_sketches_worker_func(filename: str):
 #     return kmers.load_kmers(filename, num_threads=1)
 

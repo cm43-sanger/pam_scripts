@@ -1,0 +1,8 @@
+Make jaccard estimation multithreaded
+Create a generic interface for kmer counting that returns the kmers/counts
+Move all intersection/filtering logic to this generic class
+Get a proper hash function and rename xxhash stuff (we're not actually using that)
+Set a memory limit on loaded sketches during jaccard calculation, then load two blocks at a time with half that memory.
+    Keeping a left and right block and swapping them when we move between block rows will reduce loading times.
+Remove remainder of C/cython code: use C++/pybind11 only.
+Work out if it's possible to move to C++11.
