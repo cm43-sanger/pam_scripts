@@ -257,6 +257,7 @@ def sketch_from_manifest(
             postfix={"failures": 0},
         ) as progressbar,
         open(os.path.join(output_directory, "results.tsv"), "w") as tsv_fp,
+        open(os.path.join(output_directory, "errors.log"), "w") as log_fp,
         h5py.File(os.path.join(output_directory, "sketches.h5"), "w") as h5_fp,
     ):
         print("name", "read1", "read2", "success", sep="\t", file=tsv_fp)
@@ -270,7 +271,7 @@ def sketch_from_manifest(
                 file=tsv_fp,
             )
             if result.success:
-                assert result.kmers is not None
+                assert result.kmers is not None  # otherwise pylance complains
                 h5_fp.create_dataset(
                     result.name,
                     data=result.kmers,
@@ -281,11 +282,13 @@ def sketch_from_manifest(
             else:
                 num_failures += 1
                 progressbar.set_postfix({"failures": num_failures})
-                progressbar.write(result.message)
-                progressbar.write(
-                    f"Error processing {result.name!r} "
-                    f"({result.read1!r}, {result.read2!r})"
+                error_message = (
+                    f"{result.message}Error processing {result.name!r} "
+                    f"({result.read1!r}, {result.read2!r})\n"
                 )
+                print(error_message, file=log_fp)
+                if verbose:
+                    progressbar.write(error_message)
     return len(samples) - num_failures
 
 
