@@ -26,6 +26,7 @@ UINT64_MAX = 2**64 - 1
 
 class SketchHelper(kmc.KMCHelper):
     _scale: typing.Optional[int]
+    _method: str = "custom"
     _seed: int
 
     def __init__(
@@ -59,6 +60,10 @@ class SketchHelper(kmc.KMCHelper):
         self._scale = value
 
     @property
+    def method(self):
+        return self._method
+
+    @property
     def seed(self):
         return self._seed
 
@@ -78,6 +83,7 @@ class SketchHelper(kmc.KMCHelper):
             "kmer_length": self.kmer_length,
             "threshold": self.threshold,
             "scale": self.scale,
+            "method": self.method,
             "seed": self.seed,
         }
         with open(path, "w") as f:
