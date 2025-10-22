@@ -1,4 +1,6 @@
 Make jaccard estimation multithreaded
+Put everything in the hdf5 file: no need for a directory.
+
 Create a generic interface for kmer counting that returns the kmers/counts
 Move all intersection/filtering logic to this generic class
 Get a proper hash function and rename xxhash stuff (we're not actually using that)
