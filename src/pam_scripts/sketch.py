@@ -173,15 +173,15 @@ def _resolve_arguments(
         assert num_jobs > 0
     except:
         raise ValueError(f"num_jobs must be a positive integer (got {num_jobs})")
-    num_jobs = min(num_jobs, num_threads)
-    num_job_threads = (num_threads - 1) // num_jobs + 1
     try:
         compression_level = int(compression_level)
         assert compression_level > 0 and compression_level < 10
     except:
         raise ValueError(
-            f"compression_level must be an integer in range [1, 9] (got {num_jobs})"
+            f"compression_level must be an integer in range [1, 9] (got {compression_level})"
         )
+    num_jobs = min(num_jobs, num_threads)
+    num_job_threads = (num_threads - 1) // num_jobs + 1
     return ResolvedArguments(
         num_threads=num_threads,
         num_jobs=num_jobs,
