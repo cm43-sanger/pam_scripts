@@ -1,4 +1,4 @@
-from . import kmc, kmers, xxhash
+from . import kmc, xxhash
 
 import argparse
 import h5py
