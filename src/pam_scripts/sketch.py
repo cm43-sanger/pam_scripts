@@ -81,7 +81,7 @@ class SketchHelper(kmc.KMCHelper):
     def save_config(self, path: str):
         config = {
             "kmer_length": self.kmer_length,
-            "threshold": round(self.threshold, 6),
+            "threshold": self.threshold,
             "scale": self.scale,
             "method": self.method,
             "seed": self.seed,

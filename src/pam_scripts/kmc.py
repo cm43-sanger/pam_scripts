@@ -161,7 +161,7 @@ class KMCHelper:
             assert value >= 0.0
         except:
             raise ValueError(f"threshold must be positive (got {value})")
-        self._threshold = value
+        self._threshold = round(value, 6)
 
     @property
     def max_memory(self):
