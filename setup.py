@@ -5,13 +5,7 @@ import pybind11
 import sys
 
 # --- Compile flags ---
-extra_compile_args_cpp = [
-    "-O3",
-    "-std=c++17",
-    "-march=native",
-    "-Rpass=loop-vectorize",
-    "-Rpass-missed=loop-vectorize",
-]
+extra_compile_args_cpp = ["-O3", "-std=c++17", "-march=native"]
 extra_compile_args_cython = ["-O3", "-march=native"]
 
 if sys.platform == "win32":
