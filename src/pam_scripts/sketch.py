@@ -2,6 +2,7 @@ from . import kmc, xxhash
 
 import argparse
 import h5py
+import traceback
 import json
 import math
 import multiprocessing
@@ -130,6 +131,15 @@ def load_manifest(manifest: str):
     return samples
 
 
+class SketchResult(typing.NamedTuple):
+    name: str
+    read1: str
+    read2: str
+    success: int
+    kmers: typing.Optional[np.ndarray[tuple[int], np.dtype[np.uint64]]] = None
+    message: str = ""
+
+
 __sketch_from_manifest_helper: typing.Optional[SketchHelper] = None
 
 
@@ -145,10 +155,11 @@ def __sketch_from_manifest_worker_func(samples: tuple[str, str, str]):
         )
     name, read1, read2 = samples
     try:
-        sketch = __sketch_from_manifest_helper.sketch_reads(read1, read2)
-    except:
-        return (name, read1, read2, None)
-    return (name, read1, read2, sketch)
+        kmers = __sketch_from_manifest_helper.sketch_reads(read1, read2)
+    except Exception as e:
+        error_message = "".join(traceback.format_exception(type(e), e, e.__traceback__))
+        return SketchResult(name, read1, read2, success=False, message=error_message)
+    return SketchResult(name, read1, read2, success=True, kmers=kmers)
 
 
 class ResolvedArguments(typing.NamedTuple):
@@ -249,20 +260,32 @@ def sketch_from_manifest(
         h5py.File(os.path.join(output_directory, "sketches.h5"), "w") as h5_fp,
     ):
         print("name", "read1", "read2", "success", sep="\t", file=tsv_fp)
-        for name, read1, read2, kmers in progressbar:
-            success = kmers is not None
-            num_failures += not success
-            print(name, read1, read2, success, sep="\t", file=tsv_fp)
-            if success:
+        for result in progressbar:
+            print(
+                result.name,
+                result.read1,
+                result.read2,
+                result.success,
+                sep="\t",
+                file=tsv_fp,
+            )
+            if result.success:
+                assert result.kmers is not None
                 h5_fp.create_dataset(
-                    name,
-                    data=kmers,
+                    result.name,
+                    data=result.kmers,
                     compression="gzip",
                     compression_opts=args.compression_level,
                     shuffle=True,  # transpose bytes for better compression
                 )
-            progressbar.set_postfix({"failures": num_failures})
-            progressbar.update()
+            else:
+                num_failures += 1
+                progressbar.set_postfix({"failures": num_failures})
+                progressbar.write(result.message)
+                progressbar.write(
+                    f"Error processing {result.name!r} "
+                    f"({result.read1!r}, {result.read2!r})"
+                )
     return len(samples) - num_failures
 
 
