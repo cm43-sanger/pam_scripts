@@ -3,20 +3,11 @@ from . import kmc, xxhash
 import argparse
 import h5py
 import traceback
-import json
-import math
 import multiprocessing
 import numpy as np
 import os
-import pandas as pd
-import shutil
 import sys
-import threading
-import time
 import typing
-import warnings
-from collections.abc import Sequence
-from numba import njit, prange
 from tempfile import TemporaryDirectory
 from tqdm import tqdm as make_progressbar
 
@@ -79,16 +70,14 @@ class SketchHelper(kmc.KMCHelper):
             )
         self._seed = value
 
-    def save_config(self, path: str):
-        config = {
-            "kmer_length": self.kmer_length,
-            "threshold": self.threshold,
-            "scale": self.scale,
-            "method": self.method,
-            "seed": self.seed,
-        }
-        with open(path, "w") as f:
-            json.dump(config, f, indent=4)
+    def save_config(self, file: h5py.File):
+        info = file.create_group("info")
+        info.create_dataset("kmer_length", data=np.uint8(self.kmer_length))
+        info.create_dataset("threshold", data=np.uint64(self.threshold))
+        info.create_dataset("scale", data=np.uint64(self.scale))
+        info.create_dataset("method", data=self.method)
+        info.create_dataset("seed", data=np.uint64(self.seed))
+        return info
 
     def sketch_reads(
         self, read1: str, read2: str
@@ -169,7 +158,7 @@ class ResolvedArguments(typing.NamedTuple):
     compression_level: int
 
 
-def _resolve_arguments(
+def resolve_numerical_arguments(
     num_threads: typing.Optional[int] = None,
     num_jobs: typing.Optional[int] = None,
     compression_level: int = 4,
@@ -189,7 +178,8 @@ def _resolve_arguments(
         assert compression_level > 0 and compression_level < 10
     except:
         raise ValueError(
-            f"compression_level must be an integer in range [1, 9] (got {compression_level})"
+            "compression_level must be an integer in range [1, 9] "
+            f"(got {compression_level})"
         )
     num_jobs = min(num_jobs, num_threads)
     num_job_threads = (num_threads - 1) // num_jobs + 1
@@ -201,9 +191,22 @@ def _resolve_arguments(
     )
 
 
+def resolve_output_file(output_filename: str, overwrite: bool = False):
+    if not output_filename.lower().endswith(".h5"):
+        output_filename = output_filename + ".h5"
+    if os.path.exists(output_filename):
+        if os.path.isdir(output_filename):
+            raise IsADirectoryError(output_filename)
+        if not overwrite:
+            raise FileExistsError(output_filename)
+    else:
+        os.makedirs(os.path.dirname(output_filename), exist_ok=True)
+    return output_filename
+
+
 def sketch_from_manifest(
     manifest: str,
-    output_directory: str,
+    output_filename: str,
     kmer_length: int = kmc.DEFAULT_KMER_LENGTH,
     threshold: float = DEFAULT_THRESHOLD,
     scale: typing.Optional[int] = None,
@@ -212,12 +215,13 @@ def sketch_from_manifest(
     num_threads: typing.Optional[int] = None,
     num_jobs: typing.Optional[int] = None,
     compression_level: int = 4,
-    exist_ok: bool = False,
+    overwrite: bool = False,
     verbose: bool = False,
 ):
-    args = _resolve_arguments(
+    args = resolve_numerical_arguments(
         num_threads=num_threads, num_jobs=num_jobs, compression_level=compression_level
     )
+    output_filename = resolve_output_file(output_filename, overwrite=overwrite)
     helper = SketchHelper(
         kmer_length=kmer_length,
         threshold=threshold,
@@ -230,24 +234,14 @@ def sketch_from_manifest(
     if verbose:
         print(
             f"Sketching {len(samples)} paired-end reads from {manifest!r} "
-            f"to {output_directory!r} with {args.num_jobs} jobs, "
+            f"to {output_filename!r} with {args.num_jobs} jobs, "
             f"each with {helper.num_threads} threads.",
             file=sys.stderr,
         )
-    if os.path.exists(output_directory):
-        if not exist_ok:
-            raise FileExistsError(
-                f"output directory {output_directory!r} already exists"
-            )
-        shutil.rmtree(output_directory)
-    os.makedirs(output_directory)
-    helper.save_config(os.path.join(output_directory, "config.json"))
-    num_failures = 0
+    failures: list[str] = []
     with (
         multiprocessing.Pool(
-            num_jobs,
-            initializer=__sketch_from_manifest_worker_init,
-            initargs=(helper,),
+            num_jobs, initializer=__sketch_from_manifest_worker_init, initargs=(helper,)
         ) as pool,
         make_progressbar(
             pool.imap_unordered(__sketch_from_manifest_worker_func, samples),
@@ -256,23 +250,14 @@ def sketch_from_manifest(
             disable=not verbose,
             postfix={"failures": 0},
         ) as progressbar,
-        open(os.path.join(output_directory, "results.tsv"), "w") as tsv_fp,
-        open(os.path.join(output_directory, "errors.log"), "w") as log_fp,
-        h5py.File(os.path.join(output_directory, "sketches.h5"), "w") as h5_fp,
+        h5py.File(output_filename, "w") as f,
     ):
-        print("name", "read1", "read2", "success", sep="\t", file=tsv_fp)
+        helper.save_config(f)
+        data = f.create_group("data")
         for result in progressbar:
-            print(
-                result.name,
-                result.read1,
-                result.read2,
-                result.success,
-                sep="\t",
-                file=tsv_fp,
-            )
             if result.success:
                 assert result.kmers is not None  # otherwise pylance complains
-                h5_fp.create_dataset(
+                data.create_dataset(
                     result.name,
                     data=result.kmers,
                     compression="gzip",
@@ -280,16 +265,17 @@ def sketch_from_manifest(
                     shuffle=True,  # transpose bytes for better compression
                 )
             else:
-                num_failures += 1
-                progressbar.set_postfix({"failures": num_failures})
-                error_message = (
-                    f"{result.message}Error processing {result.name!r} "
-                    f"({result.read1!r}, {result.read2!r})\n"
-                )
-                print(error_message, file=log_fp)
+                failures.append(result.name)
+                progressbar.set_postfix({"failures": len(failures)})
                 if verbose:
+                    error_message = (
+                        f"{result.message}Error processing {result.name!r} "
+                        f"({result.read1!r}, {result.read2!r})\n"
+                    )
                     progressbar.write(error_message)
-    return len(samples) - num_failures
+    if verbose and failures:
+        print(f"Failed to sketch the following samples: {failures}", file=sys.stderr)
+    return len(samples) - len(failures)
 
 
 def load_sketches(path: str):
@@ -303,97 +289,6 @@ def load_sketches(path: str):
     return (names, sketches)
 
 
-# def __load_sketches_worker_func(filename: str):
-#     return kmers.load_kmers(filename, num_threads=1)
-
-
-# @njit
-# def _jaccard_similarity_numba(a, b):
-#     """Compute Jaccard similarity between two sorted uint64 arrays."""
-#     i = 0
-#     j = 0
-#     intersection = 0
-#     len_a = a.size
-#     len_b = b.size
-#     while i < len_a and j < len_b:
-#         ai = a[i]
-#         bj = b[j]
-#         intersection += ai == bj
-#         i += ai <= bj
-#         j += ai >= bj
-#     union = len_a + len_b - intersection
-#     if union == 0:
-#         return 0.0
-#     return intersection / union
-
-
-# @njit(parallel=True)
-# def _pairwise_jaccard_numba(n, arrays, d, progress):
-#     # Compute upper triangle in parallel
-#     for i in prange(n):
-#         d[i, i] = 1.0  # diagonal
-#         for j in range(i + 1, n):
-#             sim = _jaccard_similarity_numba(arrays[i], arrays[j])
-#             d[i, j] = sim
-#             d[j, i] = sim  # symmetric
-#         progress[0] += i
-
-
-# def pairwise_jaccard(arrays):
-#     """
-#     Compute pairwise Jaccard similarity between a list of sorted uint64 arrays.
-#     Returns a symmetric float64 matrix.
-#     """
-#     n = len(arrays)
-#     d = np.empty((n, n), dtype=np.float64)
-#     total = n * (n - 1) // 2
-#     with make_progressbar(total=total) as progressbar:
-#         progress = np.zeros(1, dtype=np.int64)
-#         thread = threading.Thread(
-#             target=_pairwise_jaccard_numba, args=(n, arrays, d, progress)
-#         )
-#         thread.start()
-#         last = 0
-#         while thread.is_alive():
-#             current = progress[0]
-#             progressbar.update(current - last)
-#             last = current
-#             time.sleep(0.01)
-#         thread.join()
-#     return d
-
-
-# def load_sketches(directory: str):
-#     results = pd.read_csv(os.path.join(directory, "results.tsv"), sep="\t")
-#     unsuccessful_names = []
-#     names = []
-#     sketches_directory = os.path.join(directory, "sketches")
-#     for row in results.itertuples():
-#         if row.success:
-#             names.append(row.name)
-#         else:
-#             unsuccessful_names.append(row.name)
-#     filenames = (os.path.join(sketches_directory, name) for name in names)
-#     with (
-#         multiprocessing.Pool() as pool,
-#         make_progressbar(
-#             pool.imap(__load_sketches_worker_func, filenames),
-#             desc="Loading databases",
-#             total=len(names),
-#         ) as progressbar,
-#     ):
-#         kmers_list_lookup = {
-#             name: kmers_list for name, kmers_list in zip(names, progressbar)
-#         }
-#     results["kmers"] = results["name"].map(kmers_list_lookup)
-#     return results
-
-
-# def calculate_distances(results: pd.DataFrame):
-#     mask =
-#     num = results['']
-
-
 def main():
     parser = argparse.ArgumentParser(
         description="Generate kmer sketches from a manifest of read sets"
@@ -404,7 +299,9 @@ def main():
         "(tab-separated, no header, names must be unique)",
     )
     parser.add_argument(
-        "output_directory", help="Output directory to store the generated sketches"
+        "output_filename",
+        help="Output filename for the generated sketches "
+        "(.h5 extension is appended if not present)",
     )
     parser.add_argument(
         "-k",
@@ -468,7 +365,7 @@ def main():
         help="Gzip compression level for HDF5 sketches (1-9, default 4)",
     )
     parser.add_argument(
-        "-f", "--exist_ok", action="store_true", help="Wipe existing directory"
+        "-f", "--overwrite", action="store_true", help="Overwrite existing file"
     )
     parser.add_argument(
         "-v", "--verbose", action="store_true", help="Enable verbose progress output"
@@ -477,7 +374,7 @@ def main():
 
     sketch_from_manifest(
         args.manifest,
-        args.output_directory,
+        args.output_filename,
         kmer_length=args.kmer_length,
         threshold=args.threshold,
         scale=args.scale,
@@ -486,7 +383,7 @@ def main():
         num_threads=args.num_threads,
         num_jobs=args.num_jobs,
         compression_level=args.compression_level,
-        exist_ok=args.exist_ok,
+        overwrite=args.overwrite,
         verbose=args.verbose,
     )
 
