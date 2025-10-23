@@ -73,7 +73,7 @@ class SketchHelper(kmc.KMCHelper):
     def save_config(self, file: h5py.File):
         info = file.create_group("info")
         info.create_dataset("kmer_length", data=np.uint8(self.kmer_length))
-        info.create_dataset("threshold", data=np.uint64(self.threshold))
+        info.create_dataset("threshold", data=np.float64(self.threshold))
         info.create_dataset("scale", data=np.uint64(self.scale))
         info.create_dataset("method", data=self.method)
         info.create_dataset("seed", data=np.uint64(self.seed))
