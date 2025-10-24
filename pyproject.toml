@@ -19,10 +19,11 @@ classifiers = [
 dynamic = ["dependencies"]
 
 [project.scripts]
-embed-distances = "pam_scripts.embed_distances:main"
 kpy = "pam_scripts.kpy:main"
 kpy-count = "pam_scripts.kmc:main"
 kpy-sketch = "pam_scripts.sketch:main"
+kpy-embed = "pam_scripts.embed:main"
+kpy-triangle = "pam_scripts.triangle:main"
 
 [tool.setuptools.dynamic]
 dependencies = { file = ["requirements.txt"] }

@@ -12,3 +12,11 @@ Work out if it's possible to move to C++11.
 Relevant line for pre-filtering:
     ++small_k_buf.buf[...];
 in kmc_core/splitter.cpp
+DON'T DO this
+
+Proposal:
+Get k=15 kmers from read file as u32.
+Hash, mask down to u30 then reject any above u26 maximum (scale by 16).
+Create a 2^26 element u16 counts array (128 MB).
+Do saturating increment with u26 hashes as indices to get sketch.
+Each read has a single thread, sketch multiple reads in parallel.
