@@ -194,6 +194,7 @@ def resolve_numerical_arguments(
 def resolve_output_file(output_filename: str, overwrite: bool = False):
     if not output_filename.lower().endswith(".h5"):
         output_filename = output_filename + ".h5"
+    output_filename = os.path.abspath(output_filename)
     if os.path.exists(output_filename):
         if os.path.isdir(output_filename):
             raise IsADirectoryError(output_filename)
