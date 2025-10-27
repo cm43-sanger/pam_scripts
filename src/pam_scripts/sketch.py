@@ -283,7 +283,7 @@ def load_sketches(path: str):
     names = []
     sketches = []
     with h5py.File(path, "r") as f:
-        for name, data in f.items():
+        for name, data in f["data"].items():
             print(name)
             names.append(name)
             sketches.append(np.asarray(data[:], dtype=np.uint64))
