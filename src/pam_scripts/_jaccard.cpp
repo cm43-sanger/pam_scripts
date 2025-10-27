@@ -6,6 +6,34 @@
 
 namespace py = pybind11;
 
+std::pair<std::vector<size_t>, std::vector<size_t>> get_below_diagonal_partitions(
+    size_t N, size_t num_threads)
+{
+    std::vector<size_t> i_parts, j_parts;
+    i_parts.reserve(num_threads + 1);
+    j_parts.reserve(num_threads + 1);
+    i_parts.push_back(0);
+    j_parts.push_back(0);
+    size_t i = 1;
+    size_t total = 0;
+    size_t final_total = N * (N - 1) / 2;
+    for (size_t t = 1; t < num_threads; t++)
+    {
+        size_t target = t * final_total / num_threads;
+        size_t next_total;
+        while ((next_total = total + i) <= target)
+        {
+            total = next_total;
+            ++i;
+        }
+        i_parts.push_back(i);
+        j_parts.push_back(target - total);
+    }
+    i_parts.push_back(N);
+    j_parts.push_back(0);
+    return {i_parts, j_parts};
+}
+
 size_t get_intersection_size(const uint64_t *A, size_t nA, const uint64_t *B, size_t nB)
 {
     size_t iA = 0, iB = 0, intersection_size = 0;
