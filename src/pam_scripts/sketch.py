@@ -267,7 +267,7 @@ def sketch_from_manifest(
                 if verbose:
                     error_message = (
                         f"{result.message}Error processing {result.name!r} "
-                        f"({result.read1!r}, {result.read2!r})\n"
+                        f"({result.reads})\n"
                     )
                     progressbar.write(error_message)
     if verbose and failures:
