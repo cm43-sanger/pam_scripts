@@ -274,7 +274,7 @@ class KMCHelper:
                 )
             except subprocess.CalledProcessError as e:
                 raise RuntimeError(
-                    f"stderr:\n{e.stderr}\nFailed to count kmers in {reads}"
+                    f"\n{e.stderr}Failed to count kmers in {reads}"
                 ) from e
             except Exception as e:
                 raise RuntimeError(f"Failed to count kmers in {reads}") from e
