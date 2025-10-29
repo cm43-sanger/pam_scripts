@@ -230,7 +230,7 @@ def sketch_from_manifest(
     samples = load_manifest(manifest)
     if verbose:
         print(
-            f"Sketching {len(samples)} paired-end reads from {manifest!r} "
+            f"Sketching {len(samples)} samples from {manifest!r} "
             f"to {output_filename!r} with {args.num_jobs} jobs, "
             f"each with {helper.num_threads} threads.",
             file=sys.stderr,
