@@ -18,20 +18,19 @@ UINT64_MAX = 2**64 - 1
 
 class SketchHelper(kmc.KMCHelper):
     _scale: typing.Optional[int]
-    _method: str = "custom"
+    _method: str = "custom2"
     _seed: int
 
     def __init__(
         self,
         kmer_length: int = kmc.DEFAULT_KMER_LENGTH,
-        threshold: float = DEFAULT_THRESHOLD,
         scale: typing.Optional[int] = None,
         seed: int = DEFAULT_SEED,
         max_memory: typing.Optional[float] = None,
         num_threads: typing.Optional[int] = None,
     ):
         self.kmer_length = kmer_length
-        self.threshold = threshold
+        self.correct_errors = True
         self.scale = scale
         self.seed = seed
         self.max_memory = max_memory
@@ -73,7 +72,6 @@ class SketchHelper(kmc.KMCHelper):
     def save_config(self, file: h5py.File):
         info = file.create_group("info")
         info.create_dataset("kmer_length", data=np.uint8(self.kmer_length))
-        info.create_dataset("threshold", data=np.float64(self.threshold))
         info.create_dataset("scale", data=np.uint64(self.scale))
         info.create_dataset("method", data=self.method)
         info.create_dataset("seed", data=np.uint64(self.seed))
@@ -84,17 +82,15 @@ class SketchHelper(kmc.KMCHelper):
     ) -> np.ndarray[tuple[int], np.dtype[np.uint64]]:
         with TemporaryDirectory() as temporary_directory:
             db_path = os.path.join(temporary_directory, "counts")
-            db = self.count_reads(read1, read2, db_path)
+            db = self.count_kmers(db_path, read1, read2)
             kmers = db.load_kmers()
+        hashes = xxhash.hash_kmers(kmers, seed=self.seed, num_threads=self.num_threads)
         if self.scale != 1:
-            hashes = xxhash.hash_kmers(
-                kmers, seed=self.seed, num_threads=self.num_threads
-            )
-            max_count = UINT64_MAX // self.scale
-            passed = hashes <= max_count
-            kmers = kmers[passed]
-        kmers.sort()
-        return kmers
+            max_value = UINT64_MAX // self.scale
+            passed = hashes <= max_value
+            hashes = hashes[passed]
+        hashes.sort()
+        return hashes
 
 
 def load_manifest(manifest: str):
@@ -125,7 +121,7 @@ class SketchResult(typing.NamedTuple):
     read1: str
     read2: str
     success: int
-    kmers: typing.Optional[np.ndarray[tuple[int], np.dtype[np.uint64]]] = None
+    hashes: typing.Optional[np.ndarray[tuple[int], np.dtype[np.uint64]]] = None
     message: str = ""
 
 
@@ -144,11 +140,11 @@ def __sketch_from_manifest_worker_func(samples: tuple[str, str, str]):
         )
     name, read1, read2 = samples
     try:
-        kmers = __sketch_from_manifest_helper.sketch_reads(read1, read2)
+        hashes = __sketch_from_manifest_helper.sketch_reads(read1, read2)
     except Exception as e:
         error_message = "".join(traceback.format_exception(type(e), e, e.__traceback__))
         return SketchResult(name, read1, read2, success=False, message=error_message)
-    return SketchResult(name, read1, read2, success=True, kmers=kmers)
+    return SketchResult(name, read1, read2, success=True, hashes=hashes)
 
 
 class ResolvedArguments(typing.NamedTuple):
@@ -209,7 +205,6 @@ def sketch_from_manifest(
     manifest: str,
     output_filename: str,
     kmer_length: int = kmc.DEFAULT_KMER_LENGTH,
-    threshold: float = DEFAULT_THRESHOLD,
     scale: typing.Optional[int] = None,
     seed: int = DEFAULT_SEED,
     max_memory: typing.Optional[float] = None,
@@ -225,7 +220,6 @@ def sketch_from_manifest(
     output_filename = resolve_output_file(output_filename, overwrite=overwrite)
     helper = SketchHelper(
         kmer_length=kmer_length,
-        threshold=threshold,
         scale=scale,
         seed=seed,
         max_memory=max_memory,
@@ -257,10 +251,10 @@ def sketch_from_manifest(
         data = f.create_group("data")
         for result in progressbar:
             if result.success:
-                assert result.kmers is not None  # otherwise pylance complains
+                assert result.hashes is not None  # otherwise pylance complains
                 data.create_dataset(
                     result.name,
-                    data=result.kmers,
+                    data=result.hashes,
                     compression="gzip",
                     compression_opts=args.compression_level,
                     shuffle=True,  # transpose bytes for better compression
@@ -311,14 +305,6 @@ def main():
         default=kmc.DEFAULT_KMER_LENGTH,
         help=f"Kmer length (default {kmc.DEFAULT_KMER_LENGTH}, odd, "
         f">={kmc.MINIMUM_KMER_LENGTH}, <={kmc.MAXIMUM_KMER_LENGTH})",
-    )
-    parser.add_argument(
-        "-c",
-        "--threshold",
-        type=float,
-        default=DEFAULT_THRESHOLD,
-        help="Filter kmers with counts below threshold * mean (default "
-        f"{DEFAULT_THRESHOLD})",
     )
     parser.add_argument(
         "-s",
@@ -377,7 +363,6 @@ def main():
         args.manifest,
         args.output_filename,
         kmer_length=args.kmer_length,
-        threshold=args.threshold,
         scale=args.scale,
         seed=args.seed,
         max_memory=args.max_memory,
