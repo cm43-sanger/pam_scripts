@@ -13,12 +13,10 @@ import math
 import os
 import subprocess
 import typing
-import warnings
 import numpy as np
-from dataclasses import dataclass
 from tempfile import NamedTemporaryFile, TemporaryDirectory
 from scipy.signal import find_peaks
-from . import _kmc
+from . import _core, _kmc
 
 NUM_CPUS = os.cpu_count() or 1
 DEFAULT_KMER_LENGTH = 25
@@ -34,13 +32,6 @@ ERROR_CORRECTION_PERCENTILE = 99.0
 ERROR_CORRECTION_NUM_POINTS = 101
 ERROR_CORRECTION_SHIFT = 10
 ERROR_CORRECTION_WIDTH = 3
-
-
-class DirectConstructionError(UserWarning):
-    pass
-
-
-warnings.simplefilter("error", DirectConstructionError)
 
 
 def _estimate_min_count(
@@ -83,7 +74,7 @@ def _estimate_min_count(
     return math.exp(uniform_log_counts[troughs[0]])
 
 
-@dataclass(frozen=True)
+@_core.guarded_dataclass
 class KMCDatabase:
     path: str
     kmer_length: int
@@ -95,9 +86,6 @@ class KMCDatabase:
     max_count: int
     both_strands: bool
     total_kmers: int
-
-    def __post_init__(self):
-        warnings.warn("construct with load_database", DirectConstructionError)
 
     def load_kmers(self) -> np.ndarray[tuple[int], np.dtype[np.uint64]]:
         return _kmc.load_kmers(self.path)
@@ -170,7 +158,7 @@ class KMCDatabase:
 
 
 def load_database(db_path: str):
-    with warnings.catch_warnings(action="ignore", category=DirectConstructionError):
+    with _core.release_guard():
         return KMCDatabase(db_path, *_kmc.get_info(db_path))
 
 
