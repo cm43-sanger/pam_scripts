@@ -200,11 +200,12 @@ class KMCHelper:
     def kmer_length(self, value: int):
         try:
             value = int(value)
-            assert (
-                value % 2
-                and value >= MINIMUM_KMER_LENGTH
-                and value <= MAXIMUM_KMER_LENGTH
-            )
+            if (
+                value % 2 == 0
+                or value < MINIMUM_KMER_LENGTH
+                or value > MAXIMUM_KMER_LENGTH
+            ):
+                raise ValueError
         except:
             raise ValueError(
                 "kmer_length must be a positive, odd integer in range "
@@ -228,7 +229,8 @@ class KMCHelper:
     def max_memory(self, value: typing.Optional[float]):
         try:
             value = MINIMUM_MAX_MEMORY if value is None else float(value)
-            assert value >= MINIMUM_MAX_MEMORY
+            if value < MINIMUM_MAX_MEMORY:
+                raise ValueError
         except:
             raise ValueError(
                 f"max_memory must be at least {MINIMUM_MAX_MEMORY} GB (got {value})"
@@ -243,7 +245,8 @@ class KMCHelper:
     def num_threads(self, value: typing.Optional[int]):
         try:
             value = NUM_CPUS if value is None else int(value)
-            assert value > 0
+            if value <= 0:
+                raise ValueError
         except:
             raise ValueError(f"num_threads must be a positive integer (got {value})")
         self._num_threads = min(value, 128)

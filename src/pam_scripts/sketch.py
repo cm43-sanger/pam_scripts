@@ -44,7 +44,8 @@ class SketchHelper(kmc.KMCHelper):
         if value is not None:
             try:
                 value = int(value)
-                assert value > 0
+                if value <= 0:
+                    raise ValueError
             except:
                 raise ValueError(f"scale must be a positive integer (got {value})")
         self._scale = value
@@ -61,7 +62,8 @@ class SketchHelper(kmc.KMCHelper):
     def seed(self, value: int):
         try:
             value = int(value)
-            assert value > 0 and value <= UINT64_MAX
+            if value <= 0 or value > UINT64_MAX:
+                raise ValueError
         except:
             raise ValueError(
                 f"seed must be an integer in range [1, 2^64-1] (got {value})"
@@ -158,17 +160,20 @@ def resolve_numerical_arguments(
 ):
     try:
         num_threads = kmc.NUM_CPUS if num_threads is None else int(num_threads)
-        assert num_threads > 0
+        if num_threads <= 0:
+            raise ValueError
     except:
         raise ValueError(f"num_threads must be a positive integer (got {num_threads})")
     try:
         num_jobs = 1 if num_jobs is None else int(num_jobs)
-        assert num_jobs > 0
+        if num_jobs <= 0:
+            raise ValueError
     except:
         raise ValueError(f"num_jobs must be a positive integer (got {num_jobs})")
     try:
         compression_level = int(compression_level)
-        assert compression_level > 0 and compression_level < 10
+        if compression_level <= 0 or compression_level >= 10:
+            raise ValueError
     except:
         raise ValueError(
             "compression_level must be an integer in range [1, 9] "

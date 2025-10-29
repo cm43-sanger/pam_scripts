@@ -73,7 +73,8 @@ def load_distance_matrix(filename: str):
                     :taxon_index, taxon_index
                 ] = row
                 taxon_index += 1
-            assert taxon_index == num_taxa
+            if taxon_index != num_taxa:
+                raise ValueError("number of taxa does not match header")
         except Exception as e:
             raise ValueError(
                 f"Invalid phylip file: failed at line {taxon_index + 1}"
