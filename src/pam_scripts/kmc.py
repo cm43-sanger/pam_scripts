@@ -268,8 +268,14 @@ class KMCHelper:
                         temporary_directory,
                     ],
                     stdout=log_file,
+                    stderr=subprocess.PIPE,
                     check=True,
+                    text=True,
                 )
+            except subprocess.CalledProcessError as e:
+                raise RuntimeError(
+                    f"stderr:\n{e.stderr}\nFailed to count kmers in {reads}"
+                ) from e
             except Exception as e:
                 raise RuntimeError(f"Failed to count kmers in {reads}") from e
         return load_database(output_db_path)
