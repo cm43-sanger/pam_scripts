@@ -1,15 +1,14 @@
-from . import kmc, xxhash
-
 import argparse
-import h5py
-import traceback
 import multiprocessing
-import numpy as np
 import os
 import sys
+import traceback
 import typing
+import h5py
+import numpy as np
 from tempfile import TemporaryDirectory
 from tqdm import tqdm as make_progressbar
+from . import kmc, xxhash
 
 DEFAULT_THRESHOLD = 0.05
 DEFAULT_SEED = 42
@@ -77,12 +76,10 @@ class SketchHelper(kmc.KMCHelper):
         info.create_dataset("seed", data=np.uint64(self.seed))
         return info
 
-    def sketch_reads(
-        self, read1: str, read2: str
-    ) -> np.ndarray[tuple[int], np.dtype[np.uint64]]:
+    def sketch_reads(self, *reads: str) -> np.ndarray[tuple[int], np.dtype[np.uint64]]:
         with TemporaryDirectory() as temporary_directory:
             db_path = os.path.join(temporary_directory, "counts")
-            db = self.count_kmers(db_path, read1, read2)
+            db = self.count_kmers(db_path, *reads)
             kmers = db.load_kmers()
         hashes = xxhash.hash_kmers(kmers, seed=self.seed, num_threads=self.num_threads)
         if self.scale != 1:
@@ -95,22 +92,23 @@ class SketchHelper(kmc.KMCHelper):
 
 def load_manifest(manifest: str):
     unique_names: set[str] = set()
-    samples: list[tuple[str, str, str]] = []
+    samples: list[tuple[str, list[str]]] = []
     try:
         with open(manifest) as f:
             for i, line in enumerate(f, start=1):
                 try:
-                    name, read1, read2 = map(str.strip, line.strip().split("\t"))
-                except ValueError:
-                    raise ValueError(f"line {i} is invalid: {line.strip()!r}")
+                    name, *reads = map(str.strip, line.strip().split("\t"))
+                    if not reads:
+                        raise ValueError("no reads specified")
+                except Exception as e:
+                    raise ValueError(f"line {i} is invalid: {line.strip()!r}") from e
                 if name in unique_names:
                     raise ValueError(f"repeated name {name!r} in line {i}")
                 unique_names.add(name)
-                if not os.path.exists(read1):
-                    raise FileNotFoundError(f"{read1!r} in line {i}")
-                if not os.path.exists(read2):
-                    raise FileNotFoundError(f"{read2!r} in line {i}")
-                samples.append((name, read1, read2))
+                for read in reads:
+                    if not os.path.exists(read):
+                        raise FileNotFoundError(f"{read!r} in line {i}")
+                samples.append((name, reads))
     except Exception as e:
         raise ValueError(f"unable to load manifest {manifest!r}") from e
     return samples
@@ -118,8 +116,7 @@ def load_manifest(manifest: str):
 
 class SketchResult(typing.NamedTuple):
     name: str
-    read1: str
-    read2: str
+    reads: list[str]
     success: int
     hashes: typing.Optional[np.ndarray[tuple[int], np.dtype[np.uint64]]] = None
     message: str = ""
@@ -133,18 +130,18 @@ def __sketch_from_manifest_worker_init(sketch_helper: SketchHelper):
     __sketch_from_manifest_helper = sketch_helper
 
 
-def __sketch_from_manifest_worker_func(samples: tuple[str, str, str]):
+def __sketch_from_manifest_worker_func(samples: tuple[str, list[str]]):
     if __sketch_from_manifest_helper is None:
         raise RuntimeError(
             "worker function called outside of initialized multiprocessing context."
         )
-    name, read1, read2 = samples
+    name, reads = samples
     try:
-        hashes = __sketch_from_manifest_helper.sketch_reads(read1, read2)
+        hashes = __sketch_from_manifest_helper.sketch_reads(*reads)
     except Exception as e:
         error_message = "".join(traceback.format_exception(type(e), e, e.__traceback__))
-        return SketchResult(name, read1, read2, success=False, message=error_message)
-    return SketchResult(name, read1, read2, success=True, hashes=hashes)
+        return SketchResult(name, reads, success=False, message=error_message)
+    return SketchResult(name, reads, success=True, hashes=hashes)
 
 
 class ResolvedArguments(typing.NamedTuple):
@@ -290,7 +287,7 @@ def main():
     )
     parser.add_argument(
         "manifest",
-        help="Path to the manifest file with columns for name, read1 and read2 "
+        help="Path to the manifest file with columns for name and each read "
         "(tab-separated, no header, names must be unique)",
     )
     parser.add_argument(
