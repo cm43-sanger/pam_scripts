@@ -277,7 +277,7 @@ class KMCHelper:
                     f"\n{e.stderr}Failed to count kmers in {reads}"
                 ) from e
             except Exception as e:
-                raise RuntimeError(f"Failed to count kmers in {reads}") from e
+                raise RuntimeError(f"failed to count kmers in {reads}") from e
         return load_database(output_db_path)
 
     def count_kmers(self, output_db_path: str, *reads: str):
