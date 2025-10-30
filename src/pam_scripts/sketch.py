@@ -10,26 +10,26 @@ from tempfile import TemporaryDirectory
 from tqdm import tqdm as make_progressbar
 from . import kmc, xxhash
 
-DEFAULT_THRESHOLD = 0.05
 DEFAULT_SEED = 42
 UINT64_MAX = 2**64 - 1
 
 
 class SketchHelper(kmc.KMCHelper):
     _scale: typing.Optional[int]
-    _method: str = "custom2"
+    _method: str = "custom_log"
     _seed: int
 
     def __init__(
         self,
         kmer_length: int = kmc.DEFAULT_KMER_LENGTH,
+        threshold: float = kmc.DEFAULT_THRESHOLD,
         scale: typing.Optional[int] = None,
         seed: int = DEFAULT_SEED,
         max_memory: typing.Optional[float] = None,
         num_threads: typing.Optional[int] = None,
     ):
         self.kmer_length = kmer_length
-        self.correct_errors = True
+        self.threshold = threshold
         self.scale = scale
         self.seed = seed
         self.max_memory = max_memory
@@ -207,6 +207,7 @@ def sketch_from_manifest(
     manifest: str,
     output_filename: str,
     kmer_length: int = kmc.DEFAULT_KMER_LENGTH,
+    threshold: float = kmc.DEFAULT_THRESHOLD,
     scale: typing.Optional[int] = None,
     seed: int = DEFAULT_SEED,
     max_memory: typing.Optional[float] = None,
@@ -222,6 +223,7 @@ def sketch_from_manifest(
     output_filename = resolve_output_file(output_filename, overwrite=overwrite)
     helper = SketchHelper(
         kmer_length=kmer_length,
+        threshold=threshold,
         scale=scale,
         seed=seed,
         max_memory=max_memory,
@@ -328,6 +330,14 @@ def main():
         f">={kmc.MINIMUM_KMER_LENGTH}, <={kmc.MAXIMUM_KMER_LENGTH})",
     )
     parser.add_argument(
+        "-c",
+        "--threshold",
+        type=float,
+        default=kmc.DEFAULT_THRESHOLD,
+        help="Filter kmers with counts below threshold * coverage (default "
+        f"{kmc.DEFAULT_THRESHOLD}, non-negative)",
+    )
+    parser.add_argument(
         "-s",
         "--scale",
         type=int,
@@ -384,6 +394,7 @@ def main():
         args.manifest,
         args.output_filename,
         kmer_length=args.kmer_length,
+        threshold=args.threshold,
         scale=args.scale,
         seed=args.seed,
         max_memory=args.max_memory,

@@ -22,56 +22,13 @@ NUM_CPUS = os.cpu_count() or 1
 DEFAULT_KMER_LENGTH = 25
 MINIMUM_KMER_LENGTH = 1
 MAXIMUM_KMER_LENGTH = 31
+DEFAULT_THRESHOLD = 0.05
 MINIMUM_MAX_MEMORY = 2.0
 MAXIMUM_MAX_MEMORY = 1024.0
 MAXIMUM_NUM_THREADS = 128
 MINIMUM_COUNT = 2
 CLAMP_COUNT = 65_535  # 16 bit unsigned integer maximum
 HIDE_PROGRESS_FLAG = "-hp"
-ERROR_CORRECTION_PERCENTILE = 99.0
-ERROR_CORRECTION_NUM_POINTS = 101
-ERROR_CORRECTION_SHIFT = 10
-ERROR_CORRECTION_WIDTH = 3
-
-
-def _estimate_min_count(
-    counts: np.ndarray[tuple[int], np.dtype[np.uint16]],
-    frequencies: np.ndarray[tuple[int], np.dtype[np.uint64]],
-):
-    if counts.size < 2:
-        return None
-    cumulative_frequencies = np.cumsum(frequencies)
-    total = cumulative_frequencies[-1]
-    cutoff = np.searchsorted(
-        cumulative_frequencies,
-        total * (ERROR_CORRECTION_PERCENTILE / 100.0),
-    )
-    if cutoff < 2:
-        return None
-    counts = counts[:cutoff]
-    frequencies = frequencies[:cutoff]
-    shifted_frequencies = frequencies + ERROR_CORRECTION_SHIFT
-    log_counts = np.log(counts)
-    log_shifted_frequencies = np.log(shifted_frequencies)
-    uniform_log_counts = np.linspace(
-        log_counts[0], log_counts[-1], ERROR_CORRECTION_NUM_POINTS
-    )
-    uniform_log_shifted_frequencies = np.interp(
-        uniform_log_counts, log_counts, log_shifted_frequencies
-    )
-    peaks = find_peaks(
-        uniform_log_shifted_frequencies,
-        distance=ERROR_CORRECTION_WIDTH,
-        width=ERROR_CORRECTION_WIDTH,
-    )[0]
-    troughs = find_peaks(
-        -uniform_log_shifted_frequencies,
-        distance=ERROR_CORRECTION_WIDTH,
-        width=ERROR_CORRECTION_WIDTH,
-    )[0]
-    if troughs.size == 0 or (peaks.size != 0 and troughs[0] > peaks[0]):
-        return None
-    return math.exp(uniform_log_counts[troughs[0]])
 
 
 @_core.guarded_dataclass
@@ -121,6 +78,20 @@ class KMCDatabase:
                 ) from e
         return (counts, frequencies)
 
+    def estimate_coverage(self):
+        counts, frequencies = self.histogram()
+        if counts.size < 2:
+            raise ValueError("not enough kmers to estimate coverage")
+        cumulative_frequencies = np.cumsum(frequencies)
+        total_kmers = cumulative_frequencies[-1]
+        cutoff99 = np.searchsorted(cumulative_frequencies, 0.99 * total_kmers)
+        low_cutoff = np.searchsorted(counts, math.sqrt(counts[cutoff99]))
+        return float(
+            np.average(
+                counts[low_cutoff:cutoff99], weights=frequencies[low_cutoff:cutoff99]
+            )
+        )
+
     def copy(self, output_db_path: str):
         shutil.copyfile(f"{self.path}.kmc_pre", f"{output_db_path}.kmc_pre")
         shutil.copyfile(f"{self.path}.kmc_suf", f"{output_db_path}.kmc_suf")
@@ -149,10 +120,14 @@ class KMCDatabase:
             raise RuntimeError(f"Failed to filter database {self.path!r}.") from e
         return load_database(output_db_path)
 
-    def correct_errors(self, output_db_path: str):
-        counts, frequencies = self.histogram()
-        min_count = _estimate_min_count(counts, frequencies)
-        if min_count is None:
+    def correct_errors(self, output_db_path: str, threshold: float = DEFAULT_THRESHOLD):
+        if threshold < 0.0:
+            raise ValueError("threshold must be non-negative")
+        if threshold == 0.0:
+            return self.copy(output_db_path)
+        coverage = self.estimate_coverage()
+        min_count = coverage * threshold
+        if min_count < self.min_count:
             return self.copy(output_db_path)
         return self.filter(output_db_path, min_count)
 
@@ -164,19 +139,19 @@ def load_database(db_path: str):
 
 class KMCHelper:
     _kmer_length: int
-    _correct_errors: bool
+    _threshold: float
     _max_memory: float
     _num_threads: int
 
     def __init__(
         self,
         kmer_length: int = DEFAULT_KMER_LENGTH,
-        correct_errors: bool = True,
+        threshold: float = DEFAULT_THRESHOLD,
         max_memory: typing.Optional[float] = None,
         num_threads: typing.Optional[int] = None,
     ):
         self.kmer_length = kmer_length
-        self.correct_errors = correct_errors
+        self.threshold = threshold
         self.max_memory = max_memory
         self.num_threads = num_threads
 
@@ -202,12 +177,18 @@ class KMCHelper:
         self._kmer_length = value
 
     @property
-    def correct_errors(self):
-        return self._correct_errors
+    def threshold(self):
+        return self._threshold
 
-    @correct_errors.setter
-    def correct_errors(self, value: bool):
-        self._correct_errors = bool(value)
+    @threshold.setter
+    def threshold(self, value: float):
+        try:
+            value = float(value)
+            if value < 0.0:
+                raise ValueError
+        except:
+            raise ValueError(f"threshold must be positive (got {value})")
+        self._threshold = round(value, 6)
 
     @property
     def max_memory(self):
@@ -281,7 +262,7 @@ class KMCHelper:
         return load_database(output_db_path)
 
     def count_kmers(self, output_db_path: str, *reads: str):
-        if not self.correct_errors:
+        if self.threshold == 0.0:
             return self._count_raw_kmers(output_db_path, *reads)
         with TemporaryDirectory() as temporary_directory:
             raw_db_path = os.path.join(temporary_directory, "raw_counts")
@@ -304,7 +285,12 @@ def main():
         f">={MINIMUM_KMER_LENGTH}, <={MAXIMUM_KMER_LENGTH})",
     )
     parser.add_argument(
-        "-r", "--raw_counts", action="store_true", help=f"Don't correct kmer counts"
+        "-c",
+        "--threshold",
+        type=float,
+        default=DEFAULT_THRESHOLD,
+        help="Filter kmers with counts below threshold * coverage (default "
+        f"{DEFAULT_THRESHOLD})",
     )
     parser.add_argument(
         "-m",
@@ -325,7 +311,7 @@ def main():
 
     helper = KMCHelper(
         kmer_length=args.kmer_length,
-        correct_errors=not args.raw_counts,
+        threshold=args.threshold,
         max_memory=args.max_memory,
         num_threads=args.num_threads,
     )
