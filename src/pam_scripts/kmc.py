@@ -194,7 +194,7 @@ class KMCHelper:
                 or value > MAXIMUM_KMER_LENGTH
             ):
                 raise ValueError
-        except:
+        except ValueError:
             raise ValueError(
                 "kmer_length must be a positive, odd integer in range "
                 f"[{MINIMUM_KMER_LENGTH}, {MAXIMUM_KMER_LENGTH}] (got {value})"
@@ -219,7 +219,7 @@ class KMCHelper:
             value = MINIMUM_MAX_MEMORY if value is None else float(value)
             if value < MINIMUM_MAX_MEMORY:
                 raise ValueError
-        except:
+        except ValueError:
             raise ValueError(
                 f"max_memory must be at least {MINIMUM_MAX_MEMORY} GB (got {value})"
             )
@@ -235,7 +235,7 @@ class KMCHelper:
             value = NUM_CPUS if value is None else int(value)
             if value <= 0:
                 raise ValueError
-        except:
+        except ValueError:
             raise ValueError(f"num_threads must be a positive integer (got {value})")
         self._num_threads = min(value, 128)
 

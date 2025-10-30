@@ -14,6 +14,13 @@ def main():
         help="Output PHYLIP file (defaults to stdout)",
     )
     parser.add_argument(
+        "-s",
+        "--scale",
+        type=int,
+        default=None,
+        help="Downsampling scale factor (default: database value)",
+    )
+    parser.add_argument(
         "--num_threads",
         "-t",
         type=int,
@@ -24,7 +31,7 @@ def main():
 
     if args.num_threads != 1:
         raise NotImplementedError
-    names, sketches = sketch.load_sketches(args.input_sketch)
+    names, sketches = sketch.load_sketches(args.input_sketch, scale=args.scale)
     distances = jaccard.get_pairwise_jaccard_distances(sketches)
     with pam_io.get_output_handle(args.output_phylip) as f:
         pam_io.write_distance_matrix(f, names, distances)

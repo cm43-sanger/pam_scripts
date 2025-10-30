@@ -25,12 +25,11 @@ def main():
         help="Output PHYLIP file (defaults to stdout)",
     )
     parser.add_argument(
-        "-m",
-        "--max_memory",
-        type=float,
-        default=kmc.MINIMUM_MAX_MEMORY,
-        help=f"Max amount of RAM in GB (default {kmc.MINIMUM_MAX_MEMORY}, "
-        f">={kmc.MINIMUM_MAX_MEMORY})",
+        "-s",
+        "--scale",
+        type=int,
+        default=None,
+        help="Downsampling scale factor (default: database value)",
     )
     parser.add_argument(
         "-t",
@@ -43,8 +42,12 @@ def main():
 
     if args.num_threads != 1:
         raise NotImplementedError
-    reference_names, reference_sketches = sketch.load_sketches(args.reference_sketch)
-    query_names, query_sketches = sketch.load_sketches(args.query_sketch)
+    reference_names, reference_sketches = sketch.load_sketches(
+        args.reference_sketch, scale=args.scale
+    )
+    query_names, query_sketches = sketch.load_sketches(
+        args.query_sketch, scale=args.scale
+    )
     distances = jaccard.get_jaccard_distances(reference_sketches, query_sketches)
     with pam_io.get_output_handle(args.output_phylip) as f:
         pam_io.write_distance_matrix(f, names, distances)

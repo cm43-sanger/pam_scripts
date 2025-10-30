@@ -46,7 +46,7 @@ class SketchHelper(kmc.KMCHelper):
                 value = int(value)
                 if value <= 0:
                     raise ValueError
-            except:
+            except ValueError:
                 raise ValueError(f"scale must be a positive integer (got {value})")
         self._scale = value
 
@@ -64,7 +64,7 @@ class SketchHelper(kmc.KMCHelper):
             value = int(value)
             if value <= 0 or value > UINT64_MAX:
                 raise ValueError
-        except:
+        except ValueError:
             raise ValueError(
                 f"seed must be an integer in range [1, 2^64-1] (got {value})"
             )
@@ -162,19 +162,19 @@ def resolve_numerical_arguments(
         num_threads = kmc.NUM_CPUS if num_threads is None else int(num_threads)
         if num_threads <= 0:
             raise ValueError
-    except:
+    except ValueError:
         raise ValueError(f"num_threads must be a positive integer (got {num_threads})")
     try:
         num_jobs = 1 if num_jobs is None else int(num_jobs)
         if num_jobs <= 0:
             raise ValueError
-    except:
+    except ValueError:
         raise ValueError(f"num_jobs must be a positive integer (got {num_jobs})")
     try:
         compression_level = int(compression_level)
         if compression_level <= 0 or compression_level >= 10:
             raise ValueError
-    except:
+    except ValueError:
         raise ValueError(
             "compression_level must be an integer in range [1, 9] "
             f"(got {compression_level})"
@@ -275,14 +275,33 @@ def sketch_from_manifest(
     return len(samples) - len(failures)
 
 
-def load_sketches(path: str):
-    names = []
-    sketches = []
+def load_sketches(path: str, scale: typing.Optional[int] = None):
+    names: list[str] = []
+    sketches: list[np.ndarray[tuple[int], np.dtype[np.uint64]]] = []
     with h5py.File(path, "r") as f:
-        for name, data in f["data"].items():
-            print(name)
-            names.append(name)
-            sketches.append(np.asarray(data[:], dtype=np.uint64))
+        sketch_scale = int(f["info"]["scale"])
+        try:
+            scale = sketch_scale if scale is None else int(scale)
+            if scale < sketch_scale:
+                raise ValueError
+        except ValueError:
+            raise ValueError(
+                f"Provided scale ({scale}) not an integer >= sketch scale "
+                f"({sketch_scale})"
+            )
+        if scale == sketch_scale:
+            for name, data in f["data"].items():
+                print(name)
+                names.append(name)
+                sketches.append(np.asarray(data[:], dtype=np.uint64))
+        else:
+            cutoff = UINT64_MAX // scale
+            for name, data in f["data"].items():
+                print(name)
+                names.append(name)
+                raw_hashes = np.asarray(data[:], dtype=np.uint64)
+                cutoff = np.searchsorted(raw_hashes, cutoff)
+                sketches.append(raw_hashes[:cutoff].copy())
     return (names, sketches)
 
 
