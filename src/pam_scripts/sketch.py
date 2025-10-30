@@ -279,7 +279,7 @@ def load_sketches(path: str, scale: typing.Optional[int] = None):
     names: list[str] = []
     sketches: list[np.ndarray[tuple[int], np.dtype[np.uint64]]] = []
     with h5py.File(path, "r") as f:
-        sketch_scale = int(f["info"]["scale"])
+        sketch_scale = int(f["info"]["scale"][()])
         try:
             scale = sketch_scale if scale is None else int(scale)
             if scale < sketch_scale:
