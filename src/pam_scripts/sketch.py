@@ -297,13 +297,15 @@ def load_sketches(path: str, scale: typing.Optional[int] = None):
                 names.append(name)
                 sketches.append(np.asarray(data[:], dtype=np.uint64))
         else:
-            cutoff = UINT64_MAX // scale
+            max_value = UINT64_MAX // scale
             for name, data in f["data"].items():
                 print(name)
                 names.append(name)
-                raw_hashes = np.asarray(data[:], dtype=np.uint64)
-                cutoff = np.searchsorted(raw_hashes, cutoff)
-                sketches.append(raw_hashes[:cutoff].copy())
+                hashes = np.asarray(data[:], dtype=np.uint64)
+                if not np.all(hashes[1:] >= hashes[:-1]):
+                    raise ValueError(f"Hashes for {name!r} are not sorted")
+                cutoff = np.searchsorted(hashes, max_value)
+                sketches.append(hashes[:cutoff].copy())
     return (names, sketches)
 
 
