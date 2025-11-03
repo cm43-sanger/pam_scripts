@@ -16,12 +16,13 @@ UINT64_MAX = 2**64 - 1
 
 class SketchHelper(kmc.KMCHelper):
     _scale: typing.Optional[int]
-    _method: str = "custom_log"
+    _method: str = "custom_hc"
     _seed: int
 
     def __init__(
         self,
         kmer_length: int = kmc.DEFAULT_KMER_LENGTH,
+        homopolymer: bool = False,
         threshold: float = kmc.DEFAULT_THRESHOLD,
         scale: typing.Optional[int] = None,
         seed: int = DEFAULT_SEED,
@@ -29,6 +30,7 @@ class SketchHelper(kmc.KMCHelper):
         num_threads: typing.Optional[int] = None,
     ):
         self.kmer_length = kmer_length
+        self.homopolymer = homopolymer
         self.threshold = threshold
         self.scale = scale
         self.seed = seed
@@ -73,6 +75,7 @@ class SketchHelper(kmc.KMCHelper):
     def save_config(self, file: h5py.File):
         info = file.create_group("info")
         info.create_dataset("kmer_length", data=np.uint8(self.kmer_length))
+        info.create_dataset("homopolymer", data=np.int8(self.homopolymer))
         info.create_dataset("scale", data=np.uint64(self.scale))
         info.create_dataset("method", data=self.method)
         info.create_dataset("seed", data=np.uint64(self.seed))
@@ -207,6 +210,7 @@ def sketch_from_manifest(
     manifest: str,
     output_filename: str,
     kmer_length: int = kmc.DEFAULT_KMER_LENGTH,
+    homopolymer: bool = False,
     threshold: float = kmc.DEFAULT_THRESHOLD,
     scale: typing.Optional[int] = None,
     seed: int = DEFAULT_SEED,
@@ -223,6 +227,7 @@ def sketch_from_manifest(
     output_filename = resolve_output_file(output_filename, overwrite=overwrite)
     helper = SketchHelper(
         kmer_length=kmer_length,
+        homopolymer=homopolymer,
         threshold=threshold,
         scale=scale,
         seed=seed,
@@ -338,6 +343,12 @@ def main():
         f"{kmc.DEFAULT_THRESHOLD}, non-negative)",
     )
     parser.add_argument(
+        "-hc",
+        "--homopolymer",
+        action="store_true",
+        help=f"Enable homopolymer compression (default False)",
+    )
+    parser.add_argument(
         "-s",
         "--scale",
         type=int,
@@ -394,6 +405,7 @@ def main():
         args.manifest,
         args.output_filename,
         kmer_length=args.kmer_length,
+        homopolymer=args.homopolymer,
         threshold=args.threshold,
         scale=args.scale,
         seed=args.seed,

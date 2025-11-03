@@ -139,6 +139,7 @@ def load_database(db_path: str):
 
 class KMCHelper:
     _kmer_length: int
+    _homopolymer: bool
     _threshold: float
     _max_memory: float
     _num_threads: int
@@ -146,11 +147,13 @@ class KMCHelper:
     def __init__(
         self,
         kmer_length: int = DEFAULT_KMER_LENGTH,
+        homopolymer: bool = False,
         threshold: float = DEFAULT_THRESHOLD,
         max_memory: typing.Optional[float] = None,
         num_threads: typing.Optional[int] = None,
     ):
         self.kmer_length = kmer_length
+        self.homopolymer = homopolymer
         self.threshold = threshold
         self.max_memory = max_memory
         self.num_threads = num_threads
@@ -175,6 +178,14 @@ class KMCHelper:
                 f"[{MINIMUM_KMER_LENGTH}, {MAXIMUM_KMER_LENGTH}] (got {value})"
             )
         self._kmer_length = value
+
+    @property
+    def homopolymer(self):
+        return self._homopolymer
+
+    @homopolymer.setter
+    def homopolymer(self, value: bool):
+        self._homopolymer = bool(value)
 
     @property
     def threshold(self):
@@ -235,19 +246,20 @@ class KMCHelper:
                 for read in reads:
                     print(read, file=f)
             try:
+                args = [
+                    HIDE_PROGRESS_FLAG,
+                    f"-t{self.num_threads}",
+                    f"-k{self.kmer_length}",
+                    f"-m{self.max_memory}",
+                    f"-ci{MINIMUM_COUNT}",
+                    f"-cs{CLAMP_COUNT}",
+                ]
+                if self.homopolymer:
+                    args.append("-hc")
                 subprocess.run(
-                    [
-                        "kmc",
-                        HIDE_PROGRESS_FLAG,
-                        f"-t{self.num_threads}",
-                        f"-k{self.kmer_length}",
-                        f"-m{self.max_memory}",
-                        f"-ci{MINIMUM_COUNT}",
-                        f"-cs{CLAMP_COUNT}",
-                        f"@{manifest_file.name}",
-                        output_db_path,
-                        temporary_directory,
-                    ],
+                    ["kmc"]
+                    + args
+                    + [f"@{manifest_file.name}", output_db_path, temporary_directory],
                     stdout=log_file,
                     stderr=subprocess.PIPE,
                     check=True,
@@ -285,6 +297,12 @@ def main():
         f">={MINIMUM_KMER_LENGTH}, <={MAXIMUM_KMER_LENGTH})",
     )
     parser.add_argument(
+        "-hc",
+        "--homopolymer",
+        action="store_true",
+        help=f"Enable homopolymer compression (default False)",
+    )
+    parser.add_argument(
         "-c",
         "--threshold",
         type=float,
@@ -311,6 +329,7 @@ def main():
 
     helper = KMCHelper(
         kmer_length=args.kmer_length,
+        homopolymer=args.homopolymer,
         threshold=args.threshold,
         max_memory=args.max_memory,
         num_threads=args.num_threads,
