@@ -1,10 +1,17 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/numpy.h>
 #include <pybind11/stl.h>
+#include <cmath>
 #include <vector>
 #include <iostream>
 
 namespace py = pybind11;
+
+static inline double estimate_occupancy(uint64_t filled, uint64_t total)
+{
+    return log1p(-static_cast<double>(filled) / static_cast<double>(total)) /
+           log1p(-1.0 / static_cast<double>(total));
+}
 
 std::pair<std::vector<size_t>, std::vector<size_t>> get_below_diagonal_partitions(
     size_t N, size_t num_threads)
