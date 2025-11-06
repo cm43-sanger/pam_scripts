@@ -1,6 +1,10 @@
+import os
 import warnings
 from contextlib import contextmanager
 from dataclasses import dataclass
+
+
+NUM_CPUS = os.cpu_count() or 1
 
 
 class DirectConstructionError(UserWarning):

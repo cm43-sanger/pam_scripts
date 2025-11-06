@@ -8,7 +8,7 @@ import h5py
 import numpy as np
 from tempfile import TemporaryDirectory
 from tqdm import tqdm as make_progressbar
-from . import kmc, xxhash
+from . import _core, kmc, xxhash
 
 DEFAULT_SEED = 42
 UINT64_MAX = 2**64 - 1
@@ -81,11 +81,10 @@ class SketchHelper(kmc.KMCHelper):
         info.create_dataset("seed", data=np.uint64(self.seed))
         return info
 
-    def sketch_reads(self, *reads: str) -> np.ndarray[tuple[int], np.dtype[np.uint64]]:
-        with TemporaryDirectory() as temporary_directory:
-            db_path = os.path.join(temporary_directory, "counts")
-            db = self.count_kmers(db_path, *reads)
-            kmers = db.load_kmers()
+    def sketch_db(
+        self, db: kmc.KMCDatabase
+    ) -> np.ndarray[tuple[int], np.dtype[np.uint64]]:
+        kmers = db.load_kmers()
         hashes = xxhash.hash_kmers(kmers, seed=self.seed, num_threads=self.num_threads)
         if self.scale != 1:
             max_value = UINT64_MAX // self.scale
@@ -94,34 +93,53 @@ class SketchHelper(kmc.KMCHelper):
         hashes.sort()
         return hashes
 
+    def sketch_fasta(self, *fasta_paths: str):
+        with TemporaryDirectory() as temporary_directory:
+            db_path = os.path.join(temporary_directory, "counts")
+            db = self.count_kmers_fasta(db_path, *fasta_paths)
+            return self.sketch_db(db)
+
+    def sketch_fastq(self, *fastq_paths: str):
+        with TemporaryDirectory() as temporary_directory:
+            db_path = os.path.join(temporary_directory, "counts")
+            db = self.count_kmers_fastq(db_path, *fastq_paths)
+            return self.sketch_db(db)
+
 
 def load_manifest(manifest: str):
-    unique_names: set[str] = set()
-    samples: list[tuple[str, list[str]]] = []
-    try:
-        with open(manifest) as f:
-            for i, line in enumerate(f, start=1):
-                try:
-                    name, *reads = map(str.strip, line.strip().split("\t"))
-                    if not reads:
-                        raise ValueError("no reads specified")
-                except Exception as e:
-                    raise ValueError(f"line {i} is invalid: {line.strip()!r}") from e
+    unique_names = set()
+    valid_formats = frozenset(("fasta", "fastq"))
+    with open(manifest) as f:
+        for i, line in enumerate(f, start=1):
+            try:
+                entries = [entry.strip() for entry in line.strip().split("\t")]
+                if len(entries) < 3:
+                    raise ValueError(
+                        "not enough columns (need format, name and at least one path)"
+                    )
+                input_format, name, *paths = entries
+                if input_format not in valid_formats:
+                    raise ValueError(
+                        f"invalid format {input_format!r} (must be fasta or fastq)"
+                    )
                 if name in unique_names:
-                    raise ValueError(f"repeated name {name!r} in line {i}")
-                unique_names.add(name)
-                for read in reads:
-                    if not os.path.exists(read):
-                        raise FileNotFoundError(f"{read!r} in line {i}")
-                samples.append((name, reads))
-    except Exception as e:
-        raise ValueError(f"unable to load manifest {manifest!r}") from e
-    return samples
+                    raise ValueError(f"repeated name {name!r}")
+                for path in paths:
+                    if not os.path.exists(path):
+                        raise FileNotFoundError(path)
+            except (ValueError, FileNotFoundError) as e:
+                raise ValueError(
+                    f"unable to load manifest {manifest!r}\n"
+                    f"Line {i} is invalid: {line.strip()!r}"
+                ) from e
+            unique_names.add(name)
+            yield (name, input_format, paths)
 
 
 class SketchResult(typing.NamedTuple):
     name: str
-    reads: list[str]
+    input_format: str
+    paths: list[str]
     success: int
     hashes: typing.Optional[np.ndarray[tuple[int], np.dtype[np.uint64]]] = None
     message: str = ""
@@ -135,18 +153,23 @@ def __sketch_from_manifest_worker_init(sketch_helper: SketchHelper):
     __sketch_from_manifest_helper = sketch_helper
 
 
-def __sketch_from_manifest_worker_func(samples: tuple[str, list[str]]):
+def __sketch_from_manifest_worker_func(samples: tuple[str, str, list[str]]):
     if __sketch_from_manifest_helper is None:
         raise RuntimeError(
             "worker function called outside of initialized multiprocessing context."
         )
-    name, reads = samples
+    name, input_format, paths = samples
     try:
-        hashes = __sketch_from_manifest_helper.sketch_reads(*reads)
+        if input_format == "fasta":
+            hashes = __sketch_from_manifest_helper.sketch_fasta(*paths)
+        else:
+            hashes = __sketch_from_manifest_helper.sketch_fastq(*paths)
     except Exception as e:
         error_message = "".join(traceback.format_exception(type(e), e, e.__traceback__))
-        return SketchResult(name, reads, success=False, message=error_message)
-    return SketchResult(name, reads, success=True, hashes=hashes)
+        return SketchResult(
+            name, input_format, paths, success=False, message=error_message
+        )
+    return SketchResult(name, input_format, paths, success=True, hashes=hashes)
 
 
 class ResolvedArguments(typing.NamedTuple):
@@ -162,7 +185,7 @@ def resolve_numerical_arguments(
     compression_level: int = 4,
 ):
     try:
-        num_threads = kmc.NUM_CPUS if num_threads is None else int(num_threads)
+        num_threads = _core.NUM_CPUS if num_threads is None else int(num_threads)
         if num_threads <= 0:
             raise ValueError
     except ValueError:
@@ -234,7 +257,7 @@ def sketch_from_manifest(
         max_memory=max_memory,
         num_threads=args.num_job_threads,
     )
-    samples = load_manifest(manifest)
+    samples = list(load_manifest(manifest))
     if verbose:
         print(
             f"Sketching {len(samples)} samples from {manifest!r} "
@@ -274,7 +297,7 @@ def sketch_from_manifest(
                 if verbose:
                     error_message = (
                         f"{result.message}Error processing {result.name!r} "
-                        f"({result.reads})\n"
+                        f"({result.paths} - {result.input_format})\n"
                     )
                     progressbar.write(error_message)
     if verbose and failures:
@@ -314,11 +337,12 @@ def load_sketches(path: str, scale: typing.Optional[int] = None):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Generate kmer sketches from a manifest of read sets"
+        description="Generate kmer sketches from a manifest of sequences"
     )
     parser.add_argument(
         "manifest",
-        help="Path to the manifest file with columns for name and each read "
+        help="Path to the manifest file with columns for input format "
+        "('fasta' or 'fastq'), name and each path "
         "(tab-separated, no header, names must be unique)",
     )
     parser.add_argument(
@@ -374,8 +398,8 @@ def main():
         "-t",
         "--num_threads",
         type=int,
-        default=kmc.NUM_CPUS,
-        help=f"Total number of threads (default {kmc.NUM_CPUS})",
+        default=_core.NUM_CPUS,
+        help=f"Total number of threads (default {_core.NUM_CPUS})",
     )
     parser.add_argument(
         "-j",

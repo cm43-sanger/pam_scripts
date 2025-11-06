@@ -24,8 +24,8 @@ def main():
         "--num_threads",
         "-t",
         type=int,
-        default=kmc.NUM_CPUS,
-        help=f"Number of threads (default {kmc.NUM_CPUS})",
+        default=_core.NUM_CPUS,
+        help=f"Number of threads (default {_core.NUM_CPUS})",
     )
     args = parser.parse_args()
 
