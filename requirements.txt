@@ -1,7 +1,9 @@
 h5py
+matplotlib
 numpy
 pandas
 scikit-learn
 scipy
+seaborn
 tqdm
 umap-learn
