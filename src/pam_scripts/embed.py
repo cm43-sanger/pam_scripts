@@ -50,7 +50,7 @@ def cluster_embedding(
     if hierarchical:
         clusters = DBSCAN(eps=eps, min_samples=min_samples, n_jobs=num_jobs)
     else:
-        clusters = HDBSCAN(eps=eps, min_samples=min_samples, core_dist_n_jobs=num_jobs)
+        clusters = HDBSCAN(min_samples=min_samples, core_dist_n_jobs=num_jobs)
     return clusters.fit(z)
 
 
