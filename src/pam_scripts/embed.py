@@ -1,12 +1,14 @@
 import argparse
-import numpy as np
 import typing
-import umap
 import warnings
+import numpy as np
+import umap
 from hdbscan import HDBSCAN
 from sklearn.cluster import DBSCAN
 from sklearn.decomposition import PCA
 from . import pam_io
+
+DEFAULT_EPS = 0.05
 
 
 def normalize_embedding(
@@ -43,19 +45,23 @@ def embed(distances, normalize: bool = True, num_jobs: int = 1):
 def cluster_embedding(
     z,
     hierarchical: bool = False,
-    eps: float = 0.05,
+    eps: typing.Optional[float] = None,
     min_samples: int = 10,
     num_jobs: int = 1,
 ):
-    if hierarchical:
-        clusters = DBSCAN(eps=eps, min_samples=min_samples, n_jobs=num_jobs)
-    else:
-        clusters = HDBSCAN(min_samples=min_samples, core_dist_n_jobs=num_jobs)
-    return clusters.fit(z)
+    if not hierarchical:
+        eps = eps or DEFAULT_EPS
+        return DBSCAN(eps=eps, min_samples=min_samples, n_jobs=num_jobs).fit(z)
+    if eps:
+        warnings.warn(f"eps={eps} ignored by HDBSCAN")
+    return HDBSCAN(min_samples=min_samples, core_dist_n_jobs=num_jobs).fit(z)
 
 
 def embed_distances(
-    input_phylip: str, num_jobs: int = 1, eps: float = 0.05, min_samples: int = 10
+    input_phylip: str,
+    num_jobs: int = 1,
+    eps: typing.Optional[float] = None,
+    min_samples: int = 10,
 ):
     names, distances = pam_io.load_distance_matrix(input_phylip)
     z = embed(distances, num_jobs=num_jobs)
@@ -63,7 +69,9 @@ def embed_distances(
     return (names, z, clusters)
 
 
-def write_embedding(filename: str, names: list[str], z, clusters: DBSCAN):
+def write_embedding(
+    filename: str, names: list[str], z, clusters: typing.Union[DBSCAN, HDBSCAN]
+):
     with pam_io.get_output_handle(filename) as f:
         print("name", "x", "y", "label", sep="\t", file=f)
         for name, (x, y), label in zip(names, z, clusters.labels_):
@@ -101,8 +109,9 @@ def main():
         "--eps",
         "-e",
         type=float,
-        default=0.05,
-        help="Maximum distance between neighbouring samples in cluster (default: 0.05)",
+        default=None,
+        help="Maximum distance between neighbouring samples in cluster "
+        f"(default: {DEFAULT_EPS})",
     )
     dbscan_group.add_argument(
         "--min_samples",
