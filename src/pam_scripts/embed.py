@@ -59,13 +59,20 @@ def cluster_embedding(
 
 def embed_distances(
     input_phylip: str,
-    num_jobs: int = 1,
+    hierarchical: bool = False,
     eps: typing.Optional[float] = None,
     min_samples: int = 10,
+    num_jobs: int = 1,
 ):
     names, distances = pam_io.load_distance_matrix(input_phylip)
     z = embed(distances, num_jobs=num_jobs)
-    clusters = cluster_embedding(z, eps=eps, min_samples=min_samples, num_jobs=num_jobs)
+    clusters = cluster_embedding(
+        z,
+        hierarchical=hierarchical,
+        eps=eps,
+        min_samples=min_samples,
+        num_jobs=num_jobs,
+    )
     return (names, z, clusters)
 
 
@@ -124,9 +131,10 @@ def main():
 
     names, z, clusters = embed_distances(
         args.input_phylip,
-        num_jobs=args.num_jobs,
+        hierarchical=args.hierarchical,
         eps=args.eps,
         min_samples=args.min_samples,
+        num_jobs=args.num_jobs,
     )
     write_embedding(args.output_tsv, names, z, clusters)
 
