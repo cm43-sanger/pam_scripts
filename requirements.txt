@@ -1,5 +1,6 @@
 h5py
 matplotlib
+networkx
 numpy
 pandas
 scikit-learn

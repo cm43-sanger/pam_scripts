@@ -3,6 +3,7 @@ import numpy as np
 import typing
 import umap
 import warnings
+from hdbscan import HDBSCAN
 from sklearn.cluster import DBSCAN
 from sklearn.decomposition import PCA
 from . import pam_io
@@ -39,8 +40,17 @@ def embed(distances, normalize: bool = True, num_jobs: int = 1):
     )  # need to cast or Pylance complains
 
 
-def cluster_embedding(z, eps: float = 0.05, min_samples: int = 10, num_jobs: int = 1):
-    clusters = DBSCAN(eps=eps, min_samples=min_samples, n_jobs=num_jobs)
+def cluster_embedding(
+    z,
+    hierarchical: bool = False,
+    eps: float = 0.05,
+    min_samples: int = 10,
+    num_jobs: int = 1,
+):
+    if hierarchical:
+        clusters = DBSCAN(eps=eps, min_samples=min_samples, n_jobs=num_jobs)
+    else:
+        clusters = HDBSCAN(eps=eps, min_samples=min_samples, core_dist_n_jobs=num_jobs)
     return clusters.fit(z)
 
 
@@ -74,13 +84,19 @@ def main():
         "--output_tsv", "-o", default="-", help="Output TSV file (defaults to stdout)"
     )
     parser.add_argument(
+        "-h",
+        "--hierarchical",
+        action="store_true",
+        help="Use hierarchical clustering (HDBSCAN)",
+    )
+    parser.add_argument(
         "--num_jobs",
         "-t",
         type=int,
         default=1,
         help="Number of jobs for embedding and clustering (default: 1)",
     )
-    dbscan_group = parser.add_argument_group("DBSCAN clustering options")
+    dbscan_group = parser.add_argument_group("(H)DBSCAN clustering options")
     dbscan_group.add_argument(
         "--eps",
         "-e",
