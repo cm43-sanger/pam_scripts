@@ -84,7 +84,7 @@ def main():
         "--output_tsv", "-o", default="-", help="Output TSV file (defaults to stdout)"
     )
     parser.add_argument(
-        "-h",
+        "-H",
         "--hierarchical",
         action="store_true",
         help="Use hierarchical clustering (HDBSCAN)",
