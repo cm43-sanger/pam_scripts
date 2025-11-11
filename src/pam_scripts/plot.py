@@ -1,14 +1,10 @@
 import argparse
 import typing
-import warnings
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import seaborn as sns
-import umap
 from matplotlib.figure import Figure
-from sklearn.cluster import DBSCAN
-from sklearn.decomposition import PCA
 from . import pam_io
 
 DEFAULT_DPI = 200.0
@@ -46,78 +42,22 @@ def plot_embedding(
         palette=palette,
         legend=False,
     )
-    for label in embedding["label"].unique():
+    unique_labels = embedding["label"].unique()
+    num_unclustered = sum(embedding["label"] == -1)
+    for label in unique_labels:
         if label == -1:
             continue
         subset = embedding[embedding["label"] == label]
         x, y = bounding_square(subset["x"], subset["y"])
         axis.plot(x, y, "k:", linewidth=1.0)
-        # print(label)
-        # sns.kdeplot(
-        #     x=subset["x"],
-        #     y=subset["y"],
-        #     ax=axis,
-        #     levels=[0.05],
-        #     color="k",
-        #     linewidths=1.0,
-        # )
     axis.set_xlabel("$X$")
     axis.set_ylabel("$Y$")
     axis.axis("equal")
+    fig.suptitle(
+        f"{unique_labels.size} clusters, {num_unclustered} unclustered samples"
+    )
     fig.tight_layout()
     return fig
-
-
-def normalize_embedding(
-    z,
-) -> np.ndarray[tuple[int, typing.Literal[2]], np.dtype[np.float64]]:
-    z = np.asarray(z, dtype=np.float64)
-    pca = PCA(n_components=2).fit(z)
-    scale = np.sqrt(pca.explained_variance_.sum())
-    if scale < 1e-5:
-        warnings.warn("Variance is zero; only centering embedding")
-        return z - pca.mean_
-    matrix = pca.components_.T / scale
-    return (z - pca.mean_) @ matrix
-
-
-def embed(distances, normalize: bool = True, num_jobs: int = 1):
-    distances = np.asarray(distances, dtype=np.float64)
-    reducer = umap.UMAP(metric="precomputed", n_jobs=num_jobs)
-    with warnings.catch_warnings():
-        warnings.filterwarnings(
-            "ignore",
-            message="using precomputed metric; inverse_transform will be unavailable",
-            category=UserWarning,
-            module="umap.umap_",
-        )
-        z = reducer.fit_transform(distances)
-    if normalize:
-        z = normalize_embedding(z)
-    return typing.cast(
-        np.ndarray[tuple[int, typing.Literal[2]], np.dtype[np.float64]], z
-    )  # need to cast or Pylance complains
-
-
-def cluster_embedding(z, eps: float = 0.05, min_samples: int = 10, num_jobs: int = 1):
-    clusters = DBSCAN(eps=eps, min_samples=min_samples, n_jobs=num_jobs)
-    return clusters.fit(z)
-
-
-def embed_distances(
-    input_phylip: str, num_jobs: int = 1, eps: float = 0.05, min_samples: int = 10
-):
-    names, distances = pam_io.load_distance_matrix(input_phylip)
-    z = embed(distances, num_jobs=num_jobs)
-    clusters = cluster_embedding(z, eps=eps, min_samples=min_samples, num_jobs=num_jobs)
-    return (names, z, clusters)
-
-
-def write_embedding(filename: str, names: list[str], z, clusters: DBSCAN):
-    with pam_io.get_output_handle(filename) as f:
-        print("name", "x", "y", "label", sep="\t", file=f)
-        for name, (x, y), label in zip(names, z, clusters.labels_):
-            print(name, x, y, label, sep="\t", file=f)
 
 
 def main():
@@ -127,12 +67,7 @@ def main():
     parser.add_argument(
         "input_tsv", nargs="?", default="-", help="Input tsv file (defaults to stdin)"
     )
-    parser.add_argument(
-        "output_png",
-        nargs="?",
-        default="-",
-        help="Output png file (defaults to stdout)",
-    )
+    parser.add_argument("-o", "--output", default="-", help="Output file")
     parser.add_argument(
         "-d",
         "--dpi",
@@ -148,9 +83,6 @@ def main():
     )
     args = parser.parse_args()
 
-    with pam_io.get_input_handle(args.input_tsv) as f:
-        embedding = pd.read_csv(f, sep="\t")
-    fig = plot_embedding(embedding)
     dpi = args.dpi
     try:
         dpi = float(dpi)
@@ -158,8 +90,10 @@ def main():
             raise ValueError
     except ValueError:
         raise ValueError(f"invalid DPI value: {dpi!r}")
-    with pam_io.get_output_handle(args.output_png, "wb") as f:
-        fig.savefig(f, format="png", dpi=dpi)
+    with pam_io.get_input_handle(args.input_tsv) as f:
+        embedding = pd.read_csv(f, sep="\t")
+    fig = plot_embedding(embedding)
+    fig.savefig(args.output, dpi=dpi)
     if args.interactive:
         plt.show()
     plt.close(fig)
