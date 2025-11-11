@@ -1,4 +1,5 @@
 import argparse
+import sys
 import typing
 import warnings
 import numpy as np
@@ -6,7 +7,7 @@ import umap
 from hdbscan import HDBSCAN
 from sklearn.cluster import DBSCAN
 from sklearn.decomposition import PCA
-from . import pam_io
+from . import _core, pam_io
 
 DEFAULT_EPS = 0.05
 
@@ -53,7 +54,7 @@ def cluster_embedding(
         eps = eps or DEFAULT_EPS
         return DBSCAN(eps=eps, min_samples=min_samples, n_jobs=num_jobs).fit(z)
     if eps:
-        warnings.warn(f"eps={eps} ignored by HDBSCAN")
+        print(f"eps={eps} ignored by HDBSCAN", file=sys.stderr)
     return HDBSCAN(min_samples=min_samples, core_dist_n_jobs=num_jobs).fit(z)
 
 
@@ -108,8 +109,8 @@ def main():
         "--num_jobs",
         "-t",
         type=int,
-        default=1,
-        help="Number of jobs for embedding and clustering (default: 1)",
+        default=_core.NUM_CPUS,
+        help=f"Number of jobs for embedding and clustering (default: {_core.NUM_CPUS})",
     )
     dbscan_group = parser.add_argument_group("(H)DBSCAN clustering options")
     dbscan_group.add_argument(
