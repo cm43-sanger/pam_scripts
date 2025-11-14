@@ -10,7 +10,6 @@ from tempfile import TemporaryDirectory
 from tqdm import tqdm as make_progressbar
 from . import _core, kmc, xxhash
 
-DEFAULT_SEED = 42
 UINT64_MAX = 2**64 - 1
 
 
@@ -25,7 +24,7 @@ class SketchHelper(kmc.KMCHelper):
         homopolymer: bool = False,
         threshold: float = kmc.DEFAULT_THRESHOLD,
         scale: typing.Optional[int] = None,
-        seed: int = DEFAULT_SEED,
+        seed: int = _core.DEFAULT_SEED,
         max_memory: typing.Optional[float] = None,
         num_threads: typing.Optional[int] = None,
     ):
@@ -236,7 +235,7 @@ def sketch_from_manifest(
     homopolymer: bool = False,
     threshold: float = kmc.DEFAULT_THRESHOLD,
     scale: typing.Optional[int] = None,
-    seed: int = DEFAULT_SEED,
+    seed: int = _core.DEFAULT_SEED,
     max_memory: typing.Optional[float] = None,
     num_threads: typing.Optional[int] = None,
     num_jobs: typing.Optional[int] = None,
@@ -383,8 +382,8 @@ def main():
         "-d",
         "--seed",
         type=int,
-        default=DEFAULT_SEED,
-        help=f"Deterministic seed for hash function (default {DEFAULT_SEED})",
+        default=_core.DEFAULT_SEED,
+        help=f"Deterministic seed for hash function (default {_core.DEFAULT_SEED})",
     )
     parser.add_argument(
         "-m",

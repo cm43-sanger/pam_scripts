@@ -25,9 +25,14 @@ def normalize_embedding(
     return (z - pca.mean_) @ matrix
 
 
-def embed(distances, normalize: bool = True, num_jobs: int = 1):
+def embed(
+    distances,
+    normalize: bool = True,
+    seed: int = _core.DEFAULT_SEED,
+    num_jobs: int = _core.NUM_CPUS,
+):
     distances = np.asarray(distances, dtype=np.float64)
-    reducer = umap.UMAP(metric="precomputed", n_jobs=num_jobs)
+    reducer = umap.UMAP(metric="precomputed", n_jobs=num_jobs, random_state=seed)
     with warnings.catch_warnings():
         warnings.filterwarnings(
             "ignore",
@@ -48,7 +53,7 @@ def cluster_embedding(
     hierarchical: bool = False,
     eps: typing.Optional[float] = None,
     min_samples: int = 10,
-    num_jobs: int = 1,
+    num_jobs: int = _core.NUM_CPUS,
 ):
     if not hierarchical:
         eps = eps or DEFAULT_EPS
@@ -60,13 +65,14 @@ def cluster_embedding(
 
 def embed_distances(
     input_phylip: str,
+    seed: int = _core.DEFAULT_SEED,
     hierarchical: bool = False,
     eps: typing.Optional[float] = None,
     min_samples: int = 10,
-    num_jobs: int = 1,
+    num_jobs: int = _core.NUM_CPUS,
 ):
     names, distances = pam_io.load_distance_matrix(input_phylip)
-    z = embed(distances, num_jobs=num_jobs)
+    z = embed(distances, seed=seed, num_jobs=num_jobs)
     clusters = cluster_embedding(
         z,
         hierarchical=hierarchical,
@@ -98,6 +104,13 @@ def main():
     )
     parser.add_argument(
         "--output_tsv", "-o", default="-", help="Output TSV file (defaults to stdout)"
+    )
+    parser.add_argument(
+        "-d",
+        "--seed",
+        type=int,
+        default=_core.DEFAULT_SEED,
+        help=f"Deterministic seed for hash function (default {_core.DEFAULT_SEED})",
     )
     parser.add_argument(
         "-H",
@@ -132,6 +145,7 @@ def main():
 
     names, z, clusters = embed_distances(
         args.input_phylip,
+        seed=args.seed,
         hierarchical=args.hierarchical,
         eps=args.eps,
         min_samples=args.min_samples,
