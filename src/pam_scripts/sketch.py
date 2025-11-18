@@ -309,6 +309,7 @@ def load_sketches(path: str, scale: typing.Optional[int] = None):
     names: list[str] = []
     sketches: list[np.ndarray[tuple[int], np.dtype[np.uint64]]] = []
     with h5py.File(path, "r") as f:
+        kmer_length = int(f["info"]["kmer_length"][()])
         sketch_scale = int(f["info"]["scale"][()])
         try:
             scale = sketch_scale if scale is None else int(scale)
@@ -332,7 +333,7 @@ def load_sketches(path: str, scale: typing.Optional[int] = None):
                 hashes = np.asarray(data[:], dtype=np.uint64)
                 cutoff = np.searchsorted(hashes, max_value)
                 sketches.append(hashes[:cutoff].copy())
-    return (names, sketches)
+    return (names, sketches, kmer_length)
 
 
 def main():

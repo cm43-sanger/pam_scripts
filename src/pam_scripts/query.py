@@ -1,15 +1,5 @@
-from . import jaccard, kmc, pam_io, sketch
-
 import argparse
-import h5py
-import traceback
-import multiprocessing
-import numpy as np
-import os
-import sys
-import typing
-from tempfile import TemporaryDirectory
-from tqdm import tqdm as make_progressbar
+from . import _core, jaccard, pam_io, sketch
 
 
 def main():
@@ -48,7 +38,7 @@ def main():
     query_names, query_sketches = sketch.load_sketches(
         args.query_sketch, scale=args.scale
     )
-    distances = jaccard.get_jaccard_distances(reference_sketches, query_sketches)
+    distances = jaccard.get_distances(reference_sketches, query_sketches)
     with pam_io.get_output_handle(args.output_phylip) as f:
         pam_io.write_distance_matrix(f, names, distances)
 

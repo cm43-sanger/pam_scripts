@@ -1,5 +1,5 @@
 import argparse
-from . import jaccard, kmc, pam_io, sketch
+from . import _core, jaccard, pam_io, sketch
 
 
 def main():
@@ -31,8 +31,10 @@ def main():
 
     if args.num_threads != 1:
         raise NotImplementedError
-    names, sketches = sketch.load_sketches(args.input_sketch, scale=args.scale)
-    distances = jaccard.get_pairwise_jaccard_distances(sketches)
+    names, sketches, kmer_length = sketch.load_sketches(
+        args.input_sketch, scale=args.scale
+    )
+    distances = jaccard.get_pairwise_distances(sketches, kmer_length)
     with pam_io.get_output_handle(args.output_phylip) as f:
         pam_io.write_distance_matrix(f, names, distances)
 
