@@ -31,12 +31,15 @@ def plot_embedding(
         fig, axis = plt.subplots()
     else:
         fig, axis = plt.subplots(**subplots_kwargs)
+    marker_sizes = (
+        embedding["cluster_size"] * s if "cluster_size" in embedding.columns else s
+    )
     sns.scatterplot(
         data=embedding,
         x="x",
         y="y",
         hue="label",
-        s=s,
+        s=marker_sizes,
         alpha=alpha,
         ax=axis,
         palette=palette,
@@ -50,6 +53,8 @@ def plot_embedding(
         subset = embedding[embedding["label"] == label]
         x, y = bounding_square(subset["x"], subset["y"])
         axis.plot(x, y, "k:", linewidth=1.0)
+        # axis.text(max(x) + 0.05, max(y) + 0.05, label, ha="left", va="bottom")
+        axis.text(max(x), max(y), label, fontsize=8, ha="left", va="bottom")
     axis.set_xlabel("$X$")
     axis.set_ylabel("$Y$")
     axis.axis("equal")

@@ -10,6 +10,7 @@ from sklearn.decomposition import PCA
 from . import _core, pam_io
 
 DEFAULT_EPS = 0.05
+DEFAULT_MIN_SAMPLES = 5
 
 
 def normalize_embedding(
@@ -28,7 +29,7 @@ def normalize_embedding(
 def embed(
     distances,
     normalize: bool = True,
-    seed: int = _core.DEFAULT_SEED,
+    seed: typing.Optional[int] = None,
     num_jobs: int = _core.NUM_CPUS,
 ):
     distances = np.asarray(distances, dtype=np.float64)
@@ -52,7 +53,7 @@ def cluster_embedding(
     z,
     hierarchical: bool = False,
     eps: typing.Optional[float] = None,
-    min_samples: int = 10,
+    min_samples: int = DEFAULT_MIN_SAMPLES,
     num_jobs: int = _core.NUM_CPUS,
 ):
     if not hierarchical:
@@ -65,10 +66,10 @@ def cluster_embedding(
 
 def embed_distances(
     input_phylip: str,
-    seed: int = _core.DEFAULT_SEED,
+    seed: typing.Optional[int] = None,
     hierarchical: bool = False,
     eps: typing.Optional[float] = None,
-    min_samples: int = 10,
+    min_samples: int = DEFAULT_MIN_SAMPLES,
     num_jobs: int = _core.NUM_CPUS,
 ):
     names, distances = pam_io.load_distance_matrix(input_phylip)
@@ -109,8 +110,9 @@ def main():
         "-d",
         "--seed",
         type=int,
-        default=_core.DEFAULT_SEED,
-        help=f"Deterministic seed for hash function (default {_core.DEFAULT_SEED})",
+        default=None,
+        help="Deterministic seed for UMAP "
+        "(default None, WARNING: renders UMAP single-threaded if set)",
     )
     parser.add_argument(
         "-H",
@@ -138,8 +140,8 @@ def main():
         "--min_samples",
         "-m",
         type=int,
-        default=10,
-        help="Minimum samples per cluster (default: 10)",
+        default=DEFAULT_MIN_SAMPLES,
+        help=f"Minimum samples per cluster (default: {DEFAULT_MIN_SAMPLES})",
     )
     args = parser.parse_args()
 

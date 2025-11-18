@@ -5,7 +5,6 @@ from dataclasses import dataclass
 
 
 NUM_CPUS = os.cpu_count() or 1
-DEFAULT_SEED = 3735928559
 
 
 class DirectConstructionError(UserWarning):

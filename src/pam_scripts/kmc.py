@@ -222,7 +222,7 @@ class KMCHelper:
     @num_threads.setter
     def num_threads(self, value: typing.Optional[int]):
         try:
-            value = NUM_CPUS if value is None else int(value)
+            value = _core.NUM_CPUS if value is None else int(value)
             if value <= 0:
                 raise ValueError
         except ValueError:
