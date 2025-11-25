@@ -29,10 +29,11 @@ static int is_flag(const char *arg, const char *flag, const char **value)
     return 1;
 }
 
-static void safe_close(FILE *fp)
+static int safe_close(FILE *fp)
 {
     if (fp && (fp != stdin))
-        fclose(fp);
+        return fclose(fp);
+    return 0;
 }
 
 static int load_error(FILE *fp, bin_t *bins, const char *fmt, ...)
