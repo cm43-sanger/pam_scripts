@@ -10,7 +10,7 @@
 
 typedef struct HISTOGRAM_BIN
 {
-    double count, freq;
+    double count, total, unique;
 } bin_t;
 
 static inline int compare_bins(const void *a, const void *b)
@@ -25,8 +25,11 @@ static int print_usage(int code, const char *progname)
     FILE *fp = code ? stderr : stdout;
     fprintf(fp, "Usage: %s [-h] [-c CUTOFF] histogram\n", progname);
     fprintf(fp, "\n");
-    fprintf(fp, "Estimate read coverage from a whitespace-separated histogram file,\n"
-                "  reducing effect of low-count contributions.\n");
+    fprintf(fp, "Estimate read coverage from a whitespace-separated kmer count histogram file, \n"
+                "  reducing the effects of low and high-count kmers by only considering those\n"
+                "  with counts in the range sqrt(THRESHOLD) to THRESHOLD, where the total number\n"
+                "  of kmers (including duplicates) with count below THRESHOLD is a proportion\n"
+                "  CUTOFF of the total.\n");
     fprintf(fp, "\n");
     fprintf(fp, "Positional arguments:\n");
     fprintf(fp, "  histogram            Histogram file path ('-' for stdin)\n");
@@ -84,25 +87,29 @@ static int load_error(FILE *fp, bin_t *bins, const char *fmt, ...)
 static size_t get_stop(const bin_t *bins, size_t l, double total, double cutoff)
 {
     double target = cutoff * total;
-    size_t i = 0;
-    double cum = 0.0;
-    while (i < l && cum < target)
+    size_t left = 0;
+    size_t right = l;
+    while (left < right)
     {
-        cum += bins[i].count * bins[i].freq;
-        ++i;
+        size_t mid = left + (right - left) / 2;
+        if (bins[mid].total > target)
+            right = mid;
+        else
+            left = mid + 1;
     }
-    return i;
+    return left;
 }
 
 static size_t get_start(const bin_t *bins, size_t stop)
 {
-    double high = bins[stop - 1].count;
-    double low = sqrt(high);
-    size_t left = 0, right = stop;
+    double threshold = bins[stop - 1].count;
+    double min_count = sqrt(threshold);
+    size_t left = 0;
+    size_t right = stop;
     while (left < right)
     {
         size_t mid = left + (right - left) / 2;
-        if (bins[mid].count > low)
+        if (bins[mid].count > min_count)
             right = mid;
         else
             left = mid + 1;
@@ -112,13 +119,7 @@ static size_t get_start(const bin_t *bins, size_t stop)
 
 static double estimate_coverage(const bin_t *bins, size_t l, size_t start, size_t stop)
 {
-    double total = 0.0, unique = 0.0;
-    for (size_t i = start; i < stop; i++)
-    {
-        total += bins[i].count * bins[i].freq;
-        unique += bins[i].freq;
-    }
-    return total / unique;
+    return (bins[stop - 1].total - bins[start].total) / (bins[stop - 1].unique - bins[start].unique);
 }
 
 int main(int argc, char *argv[])
@@ -169,8 +170,8 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    int ordered = 1;
     double total = 0.0;
+    double unique = 0.0;
     double prev_count = -1.0;
     char line[LINE_WIDTH];
     for (size_t lineno = 1; fgets(line, LINE_WIDTH, fp); lineno++)
@@ -186,6 +187,9 @@ int main(int argc, char *argv[])
             !isfinite(count) || count < 0.0 ||
             !isfinite(freq) || freq < 0.0)
             return load_error(fp, bins, "Line %zu is invalid:\n%s\n", lineno, line);
+        if (count <= prev_count)
+            return load_error(
+                fp, bins, "Histogram count was not strictly increasing at line %zu\n", lineno);
         if (freq == 0.0)
             continue;
         if (l == m)
@@ -200,11 +204,13 @@ int main(int argc, char *argv[])
                     fp, bins, "Failed to re-allocate buffer of size %zu at line %zu\n", m, lineno);
             bins = new_bins;
         }
-        bins[l].count = count, bins[l].freq = freq;
-        ++l;
-        ordered &= count > prev_count;
+        bins[l].count = count;
+        bins[l].total = total;
+        bins[l].unique = unique;
         total += count * freq;
+        unique += freq;
         prev_count = count;
+        ++l;
     }
     safe_close(fp);
 
@@ -219,12 +225,6 @@ int main(int argc, char *argv[])
         free(bins);
         fprintf(stderr, "Overflow while accumulating histogram total\n");
         return 1;
-    }
-
-    if (!ordered)
-    {
-        fprintf(stderr, "Histogram file was not sorted\n");
-        qsort(bins, l, sizeof(bin_t), compare_bins);
     }
 
     size_t stop = get_stop(bins, l, total, cutoff);
