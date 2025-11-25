@@ -20,9 +20,8 @@ static inline int compare_bins(const void *a, const void *b)
     return (A->count > B->count) - (A->count < B->count);
 }
 
-static int print_usage(int code, const char *progname)
+static void print_usage(FILE *fp, const char *progname)
 {
-    FILE *fp = code ? stderr : stdout;
     fprintf(fp, "Usage: %s [-h] [-c CUTOFF] histogram\n", progname);
     fprintf(fp, "\n");
     fprintf(fp, "Estimate read coverage from a whitespace-separated kmer count histogram file, \n"
@@ -37,7 +36,6 @@ static int print_usage(int code, const char *progname)
     fprintf(fp, "Options:\n");
     fprintf(fp, "  -h, --help           Show this help message and exit\n");
     fprintf(fp, "  -c, --cutoff CUTOFF  Set cutoff (default %g, 0<cutoff<1)\n", DEFAULT_CUTOFF);
-    return code;
 }
 
 static int error_usage(const char *progname, const char *fmt, ...)
@@ -47,7 +45,8 @@ static int error_usage(const char *progname, const char *fmt, ...)
     vfprintf(stderr, fmt, args);
     fprintf(stderr, "\n\n");
     va_end(args);
-    return print_usage(1, progname);
+    print_usage(stderr, progname);
+    return 1;
 }
 
 static int is_flag(const char *arg, const char *flag)
@@ -124,16 +123,17 @@ static double estimate_coverage(const bin_t *bins, size_t l, size_t start, size_
 int main(int argc, char *argv[])
 {
     const char *progname = argv[0];
-    if (argc == 1)
-        return print_usage(1, progname);
-    const char *filename = NULL;
+    const char *path = NULL;
     double cutoff = DEFAULT_CUTOFF;
     for (int i = 1; i < argc; i++)
     {
         const char *arg = argv[i];
         const char *value;
         if (is_flag(arg, "-h") || is_flag(arg, "--help"))
-            return print_usage(0, progname);
+        {
+            print_usage(stdout, progname);
+            return 0;
+        }
         else if (has_flag(arg, "-c", &value) || has_flag(arg, "--cutoff", &value))
         {
             if (value[0] == '\0')
@@ -149,18 +149,18 @@ int main(int argc, char *argv[])
         }
         else if (arg[0] == '-' && strlen(arg) != 1)
             return error_usage(progname, "Unrecognized argument: %s", arg);
-        else if (filename)
-            return error_usage(progname, "Multiple filenames");
+        else if (path)
+            return error_usage(progname, "Multiple histogram file paths");
         else
-            filename = arg;
+            path = arg;
     }
-    if (!filename)
-        return error_usage(progname, "Missing filename");
+    if (!path)
+        return error_usage(progname, "Missing histogram file path");
 
     FILE *fp = stdin;
-    if (strcmp(filename, "-") && !(fp = fopen(filename, "r")))
+    if (strcmp(path, "-") && !(fp = fopen(path, "r")))
     {
-        fprintf(stderr, "Couldn't open histogram file: %s\n", filename);
+        fprintf(stderr, "Couldn't open histogram file: %s\n", path);
         return 1;
     }
 
