@@ -1,8 +1,8 @@
+#include <math.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <math.h>
 
 #define DEFAULT_SIZE 256
 #define LINE_WIDTH 256
@@ -20,20 +20,54 @@ static inline int compare_bins(const void *a, const void *b)
     return (A->count > B->count) - (A->count < B->count);
 }
 
-static int is_flag(const char *arg, const char *flag, const char **value)
+static int print_usage(int code, const char *progname)
+{
+    FILE *fp = code ? stderr : stdout;
+    fprintf(fp, "Usage: %s [-h] [-c CUTOFF] histogram\n", progname);
+    fprintf(fp, "\n");
+    fprintf(fp, "Estimate read coverage from a whitespace-separated histogram file,\n"
+                "  reducing effect of low-count contributions.\n");
+    fprintf(fp, "\n");
+    fprintf(fp, "Positional arguments:\n");
+    fprintf(fp, "  histogram            Histogram file path ('-' for stdin)\n");
+    fprintf(fp, "\n");
+    fprintf(fp, "Options:\n");
+    fprintf(fp, "  -h, --help           Show this help message and exit\n");
+    fprintf(fp, "  -c, --cutoff CUTOFF  Set cutoff (default %g, 0<cutoff<1)\n", DEFAULT_CUTOFF);
+    return code;
+}
+
+static int error_usage(const char *progname, const char *fmt, ...)
+{
+    va_list args;
+    va_start(args, fmt);
+    vfprintf(stderr, fmt, args);
+    fprintf(stderr, "\n\n");
+    va_end(args);
+    return print_usage(1, progname);
+}
+
+static int is_flag(const char *arg, const char *flag)
+{
+    return !strcmp(arg, flag);
+}
+
+static int has_flag(const char *arg, const char *flag, const char **value)
 {
     size_t flag_len = strlen(flag);
     if (strncmp(arg, flag, flag_len))
         return 0;
     *value = &arg[flag_len];
+    if ((*value)[0] == '=')
+        ++(*value);
     return 1;
 }
 
 static int safe_close(FILE *fp)
 {
-    if (fp && (fp != stdin))
-        return fclose(fp);
-    return 0;
+    if (fp == stdin)
+        return 0;
+    return fclose(fp);
 }
 
 static int load_error(FILE *fp, bin_t *bins, const char *fmt, ...)
@@ -89,66 +123,35 @@ static double estimate_coverage(const bin_t *bins, size_t l, size_t start, size_
 
 int main(int argc, char *argv[])
 {
+    const char *progname = argv[0];
+    if (argc == 1)
+        return print_usage(1, progname);
     const char *filename = NULL;
     double cutoff = DEFAULT_CUTOFF;
     for (int i = 1; i < argc; i++)
     {
         const char *arg = argv[i];
         const char *value;
-        if (is_flag(arg, "-h", &value) || is_flag(arg, "--help", &value))
+        if (is_flag(arg, "-h") || is_flag(arg, "--help"))
+            return print_usage(0, progname);
+        else if (has_flag(arg, "-c", &value) || has_flag(arg, "--cutoff", &value))
         {
-            if (value[0] != '\0')
-            {
-                fprintf(stderr, "Unrecognized argument: %s\n", arg);
-                return 1;
-            }
-            printf("Usage: %s [-h] [-c CUTOFF] histogram\n", argv[0]);
-            printf("\n");
-            printf("Estimate coverage from a whitespace-separated histogram file.\n");
-            printf("\n");
-            printf("Positional arguments:\n");
-            printf("  histogram            Histogram file path ('-' for stdin)\n");
-            printf("\n");
-            printf("Options:\n");
-            printf("  -h, --help           Show this help message and exit\n");
-            printf("  -c, --cutoff CUTOFF  Set cutoff (default %g, 0<cutoff<1)\n", DEFAULT_CUTOFF);
-            return 0;
-        }
-        else if (is_flag(arg, "-c", &value) || is_flag(arg, "--cutoff", &value))
-        {
-            if (value[0] == '=')
-                ++value;
             if (value[0] == '\0' && ++i == argc)
-            {
-                fprintf(stderr, "Truncated cutoff\n");
-                return 1;
-            }
+                return error_usage(progname, "Truncated cutoff");
             char *endptr;
             cutoff = strtod(value, &endptr);
             if (*endptr != '\0' || isnan(cutoff) || cutoff <= 0.0 || cutoff >= 1.0)
-            {
-                fprintf(stderr, "Invalid cutoff: %s\n", value);
-                return 1;
-            }
+                return error_usage(progname, "Invalid cutoff: %s", value);
         }
         else if (arg[0] == '-')
-        {
-            fprintf(stderr, "Unrecognized argument: %s\n", arg);
-            return 1;
-        }
+            return error_usage(progname, "Unrecognized argument: %s", arg);
         else if (filename)
-        {
-            fprintf(stderr, "Multiple filenames\n");
-            return 1;
-        }
+            return error_usage(progname, "Multiple filenames");
         else
             filename = arg;
     }
     if (!filename)
-    {
-        fprintf(stderr, "Usage: %s [-h] [-c CUTOFF] histogram\n", argv[0]);
-        return 1;
-    }
+        return error_usage(progname, "Missing filename");
 
     FILE *fp = stdin;
     if (strcmp(filename, "-") && !(fp = fopen(filename, "r")))
