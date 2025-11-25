@@ -41,7 +41,7 @@ static void safe_close(FILE *fp)
         fclose(fp);
 }
 
-static int close_file_error(FILE *fp, const char *fmt, ...)
+static int file_error(FILE *fp, const char *fmt, ...)
 {
     safe_close(fp);
     va_list args;
@@ -162,18 +162,18 @@ int main(int argc, char *argv[])
     for (size_t lineno = 1; fgets(line, LINE_WIDTH, fp); lineno++)
     {
         if (strchr(line, '\n') == NULL)
-            return close_file_error(fp,
-                                    "Line %zu exceeded buffer size (%d):\n%s\n",
-                                    lineno, LINE_WIDTH, line);
+            return file_error(fp,
+                              "Line %zu exceeded buffer size (%d):\n%s\n",
+                              lineno, LINE_WIDTH, line);
         char kmer[256 + 1];
         uint64_t count;
         if (sscanf(line, "%256s %llu", kmer, &count) != 2 || strlen(kmer) != k)
-            return close_file_error(fp, "Invalid line %zu:\n%s\n", lineno, line);
+            return file_error(fp, "Invalid line %zu:\n%s\n", lineno, line);
         for (uint32_t i = 0; i < k; i++)
         {
             char base = process_base(kmer[i]);
             if (base == BAD_BASE)
-                return close_file_error(
+                return file_error(
                     fp,
                     "Invalid base (%c) at position %u in line %zu:\n%s\n",
                     kmer[i], i, lineno, line);
@@ -186,7 +186,7 @@ int main(int argc, char *argv[])
         {
             size *= 2;
             if ((hashes = realloc(hashes, size * sizeof(uint32_t))) == NULL)
-                return close_file_error(
+                return file_error(
                     fp, "Unable to allocate hashes array of size %zu\n", size);
         }
         hashes[length++] = hash64;
