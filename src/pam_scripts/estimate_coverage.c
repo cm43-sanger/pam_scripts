@@ -147,7 +147,7 @@ int main(int argc, char *argv[])
             if (*endptr != '\0' || isnan(cutoff) || cutoff <= 0.0 || cutoff >= 1.0)
                 return error_usage(progname, "Invalid cutoff: %s", value);
         }
-        else if (arg[0] == '-')
+        else if (arg[0] == '-' && strlen(arg) != 1)
             return error_usage(progname, "Unrecognized argument: %s", arg);
         else if (filename)
             return error_usage(progname, "Multiple filenames");
