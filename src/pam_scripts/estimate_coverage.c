@@ -60,9 +60,8 @@ static int has_flag(const char *arg, const char *flag, const char **value)
     size_t flag_len = strlen(flag);
     if (strncmp(arg, flag, flag_len))
         return 0;
+    flag_len += arg[flag_len] == '-';
     *value = &arg[flag_len];
-    if ((*value)[0] == '=')
-        ++(*value);
     return 1;
 }
 
