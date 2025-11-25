@@ -136,8 +136,12 @@ int main(int argc, char *argv[])
             return print_usage(0, progname);
         else if (has_flag(arg, "-c", &value) || has_flag(arg, "--cutoff", &value))
         {
-            if (value[0] == '\0' && ++i == argc)
-                return error_usage(progname, "Truncated cutoff");
+            if (value[0] == '\0')
+            {
+                if (++i == argc)
+                    return error_usage(progname, "Truncated cutoff");
+                value = argv[i];
+            }
             char *endptr;
             cutoff = strtod(value, &endptr);
             if (*endptr != '\0' || isnan(cutoff) || cutoff <= 0.0 || cutoff >= 1.0)
