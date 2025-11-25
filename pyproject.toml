@@ -25,6 +25,7 @@ kpy-sketch = "pam_scripts.sketch:main"
 kpy-triangle = "pam_scripts.triangle:main"
 kpy-embed = "pam_scripts.embed:main"
 kpy-plot = "pam_scripts.plot:main"
+filter-sig = "pam_scripts.filter_sig:main"
 
 [tool.setuptools.dynamic]
 dependencies = { file = ["requirements.txt"] }
