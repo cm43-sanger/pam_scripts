@@ -13,7 +13,7 @@ typedef struct HISTOGRAM_BIN
     double count, freq;
 } bin_t;
 
-static int compare_bins(const void *a, const void *b)
+static inline int compare_bins(const void *a, const void *b)
 {
     const bin_t *A = a;
     const bin_t *B = b;
