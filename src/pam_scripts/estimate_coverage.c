@@ -75,7 +75,7 @@ static int load_error(FILE *fp, point_t *points, const char *fmt, ...)
     return 1;
 }
 
-static size_t get_stop(const point_t *points, size_t l, double total, double cutoff)
+static double estimate_threshold(const point_t *points, size_t l, double total, double cutoff)
 {
     double target = cutoff * total;
     size_t left = 0;
@@ -88,29 +88,31 @@ static size_t get_stop(const point_t *points, size_t l, double total, double cut
         else
             left = mid + 1;
     }
-    return left;
+    if (left == 0)
+        return 0.0;
+    double i = (target - points[left - 1].total) / (points[left].total - points[left - 1].total);
+    return points[left - 1].count + i * (points[left].count - points[left - 1].count);
 }
 
-static size_t get_start(const point_t *points, size_t stop)
+static int interpolate(
+    const point_t *points, size_t l, double count, double *total, double *unique)
 {
-    double threshold = points[stop - 1].count;
-    double min_count = sqrt(threshold);
-    size_t left = 0;
-    size_t right = stop;
+    if (count < points[0].count || count > points[l - 1].count)
+        return 1;
+    size_t left = 1;
+    size_t right = l;
     while (left < right)
     {
         size_t mid = left + (right - left) / 2;
-        if (points[mid].count > min_count)
+        if (points[mid].count > count)
             right = mid;
         else
             left = mid + 1;
     }
-    return left;
-}
-
-static double estimate_coverage(const point_t *points, size_t l, size_t start, size_t stop)
-{
-    return (points[stop - 1].total - points[start].total) / (points[stop - 1].unique - points[start].unique);
+    double i = (count - points[left - 1].count) / (points[left].count - points[left - 1].count);
+    *total = points[left - 1].total + i * (points[left].total - points[left - 1].total);
+    *unique = points[left - 1].unique + i * (points[left].unique - points[left - 1].unique);
+    return 0;
 }
 
 int main(int argc, char *argv[])
@@ -167,8 +169,8 @@ int main(int argc, char *argv[])
     }
 
     double total = 0.0;
+    double unique = 0.0;
     {
-        double unique = 0.0;
         long long prev_count_lld = -1;
         char line[LINE_WIDTH];
         for (size_t lineno = 1; fgets(line, LINE_WIDTH, fp); lineno++)
@@ -185,7 +187,8 @@ int main(int argc, char *argv[])
             if (count_lld <= prev_count_lld)
                 return load_error(
                     fp, points, "Histogram count was not strictly increasing at line %zu\n", lineno);
-            if (freq_lld == 0.0)
+            prev_count_lld = count_lld;
+            if (count_lld == 0 || freq_lld == 0)
                 continue;
             if (l == m)
             {
@@ -201,47 +204,55 @@ int main(int argc, char *argv[])
             }
             double count = count_lld;
             double freq = freq_lld;
+            total += count * freq;
+            unique += freq;
+            if (!isfinite(total) || !isfinite(unique))
+                return load_error(
+                    fp, points, "Overflow while accumulating histogram total at line %zu\n", lineno);
             points[l].count = count;
             points[l].total = total;
             points[l].unique = unique;
-            total += count * freq;
-            unique += freq;
-            prev_count_lld = count_lld;
             ++l;
         }
     }
     safe_close(fp);
 
-    if (l == 0)
+    if (l < 2)
     {
         free(points);
-        fprintf(stderr, "Empty histogram file\n");
-        return 1;
-    }
-    if (!isfinite(total))
-    {
-        free(points);
-        fprintf(stderr, "Overflow while accumulating histogram total\n");
+        fprintf(stderr, "Insufficient non-zero entries in histogram file\n");
         return 1;
     }
 
-    size_t stop = get_stop(points, l, total, cutoff);
-    if (stop == 0)
+    double threshold = estimate_threshold(points, l, total, cutoff);
+    if (threshold == 0.0)
     {
+        fprintf(stderr,
+                "THRESHOLD (%.3lf) is less than smallest count (%.0lf):\n"
+                "no filtering\n",
+                threshold, points[0].count);
+        printf("%.6lf\n", total / unique);
         free(points);
-        fprintf(stderr, "Cutoff (%g) was too small\n", cutoff);
-        return 1;
+        return 0;
     }
 
-    size_t start = get_start(points, stop);
-    if (stop == start)
+    double low_total = 0.0, low_unique = 0.0;
+    if (interpolate(points, l, sqrt(threshold), &low_total, &low_unique))
+        fprintf(stderr,
+                "sqrt(THRESHOLD) (%.3lf) is less than smallest count (%.0lf):\n"
+                "no low-count filtering\n",
+                sqrt(threshold), points[0].count);
+
+    double high_total, high_unique;
+    if (interpolate(points, l, threshold, &high_total, &high_unique) ||
+        high_unique == low_unique)
     {
         free(points);
         fprintf(stderr, "Insufficient points to estimate coverage\n");
         return 1;
     }
 
-    printf("%.6lf\n", estimate_coverage(points, l, start, stop));
     free(points);
+    printf("%.6lf\n", (high_total - low_total) / (high_unique - low_unique));
     return 0;
 }
