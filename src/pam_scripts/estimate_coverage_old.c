@@ -13,6 +13,13 @@ typedef struct CUMULATIVE_POINT
     double count, total, unique;
 } point_t;
 
+static inline int compare_bins(const void *a, const void *b)
+{
+    const point_t *A = a;
+    const point_t *B = b;
+    return (A->count > B->count) - (A->count < B->count);
+}
+
 static void print_usage(FILE *fp, const char *progname)
 {
     fprintf(fp, "Usage: %s [-h] [-c CUTOFF] histogram\n", progname);
@@ -64,10 +71,10 @@ static int safe_close(FILE *fp)
     return fclose(fp);
 }
 
-static int load_error(FILE *fp, point_t *points, const char *fmt, ...)
+static int load_error(FILE *fp, point_t *bins, const char *fmt, ...)
 {
     safe_close(fp);
-    free(points);
+    free(bins);
     va_list args;
     va_start(args, fmt);
     vfprintf(stderr, fmt, args);
@@ -75,7 +82,7 @@ static int load_error(FILE *fp, point_t *points, const char *fmt, ...)
     return 1;
 }
 
-static size_t get_stop(const point_t *points, size_t l, double total, double cutoff)
+static size_t get_stop(const point_t *bins, size_t l, double total, double cutoff)
 {
     double target = cutoff * total;
     size_t left = 0;
@@ -83,7 +90,7 @@ static size_t get_stop(const point_t *points, size_t l, double total, double cut
     while (left < right)
     {
         size_t mid = left + (right - left) / 2;
-        if (points[mid].total > target)
+        if (bins[mid].total > target)
             right = mid;
         else
             left = mid + 1;
@@ -91,16 +98,16 @@ static size_t get_stop(const point_t *points, size_t l, double total, double cut
     return left;
 }
 
-static size_t get_start(const point_t *points, size_t stop)
+static size_t get_start(const point_t *bins, size_t stop)
 {
-    double threshold = points[stop - 1].count;
+    double threshold = bins[stop - 1].count;
     double min_count = sqrt(threshold);
     size_t left = 0;
     size_t right = stop;
     while (left < right)
     {
         size_t mid = left + (right - left) / 2;
-        if (points[mid].count > min_count)
+        if (bins[mid].count > min_count)
             right = mid;
         else
             left = mid + 1;
@@ -108,9 +115,9 @@ static size_t get_start(const point_t *points, size_t stop)
     return left;
 }
 
-static double estimate_coverage(const point_t *points, size_t l, size_t start, size_t stop)
+static double estimate_coverage(const point_t *bins, size_t l, size_t start, size_t stop)
 {
-    return (points[stop - 1].total - points[start].total) / (points[stop - 1].unique - points[start].unique);
+    return (bins[stop - 1].total - bins[start].total) / (bins[stop - 1].unique - bins[start].unique);
 }
 
 int main(int argc, char *argv[])
@@ -158,8 +165,8 @@ int main(int argc, char *argv[])
     }
 
     size_t l = 0, m = DEFAULT_SIZE;
-    point_t *points = malloc(DEFAULT_SIZE * sizeof(point_t));
-    if (!points)
+    point_t *bins = malloc(DEFAULT_SIZE * sizeof(point_t));
+    if (!bins)
     {
         safe_close(fp);
         fprintf(stderr, "Failed to allocate initial buffer of size %d\n", DEFAULT_SIZE);
@@ -167,81 +174,79 @@ int main(int argc, char *argv[])
     }
 
     double total = 0.0;
+    double unique = 0.0;
+    double prev_count = -1.0;
+    char line[LINE_WIDTH];
+    for (size_t lineno = 1; fgets(line, LINE_WIDTH, fp); lineno++)
     {
-        double unique = 0.0;
-        long long prev_count_lld = -1;
-        char line[LINE_WIDTH];
-        for (size_t lineno = 1; fgets(line, LINE_WIDTH, fp); lineno++)
+        if (line[0] == '#') // skip comment line
+            continue;
+        if (!strchr(line, '\n') && !feof(fp))
+            return load_error(fp, bins,
+                              "Line %zu exceeded buffer size (%d):\n%s\n",
+                              lineno, LINE_WIDTH, line);
+        double count, freq;
+        if (sscanf(line, "%lf %lf", &count, &freq) != 2 ||
+            !isfinite(count) || count < 0.0 ||
+            !isfinite(freq) || freq < 0.0)
+            return load_error(fp, bins, "Line %zu is invalid:\n%s\n", lineno, line);
+        if (count <= prev_count)
+            return load_error(
+                fp, bins, "Histogram count was not strictly increasing at line %zu\n", lineno);
+        if (freq == 0.0)
+            continue;
+        if (l == m)
         {
-            if (line[0] == '#') // skip comment line
-                continue;
-            if (!strchr(line, '\n') && !feof(fp))
-                return load_error(fp, points,
-                                  "Line %zu exceeded buffer size (%d):\n%s\n",
-                                  lineno, LINE_WIDTH, line);
-            long long count_lld, freq_lld;
-            if (sscanf(line, "%lld %lld", &count_lld, &freq_lld) != 2 || count_lld < 0 || freq_lld < 0)
-                return load_error(fp, points, "Line %zu is invalid:\n%s\n", lineno, line);
-            if (count_lld <= prev_count_lld)
+            if (m > SIZE_MAX / (2 * sizeof(point_t)))
                 return load_error(
-                    fp, points, "Histogram count was not strictly increasing at line %zu\n", lineno);
-            if (freq_lld == 0.0)
-                continue;
-            if (l == m)
-            {
-                if (m > SIZE_MAX / (2 * sizeof(point_t)))
-                    return load_error(
-                        fp, points, "Buffer too large (%zu) to re-allocate at line %zu\n", m, lineno);
-                m *= 2;
-                point_t *new_points = realloc(points, m * sizeof(point_t));
-                if (!new_points)
-                    return load_error(
-                        fp, points, "Failed to re-allocate buffer of size %zu at line %zu\n", m, lineno);
-                points = new_points;
-            }
-            double count = count_lld;
-            double freq = freq_lld;
-            points[l].count = count;
-            points[l].total = total;
-            points[l].unique = unique;
-            total += count * freq;
-            unique += freq;
-            prev_count_lld = count_lld;
-            ++l;
+                    fp, bins, "Buffer too large (%zu) to re-allocate at line %zu\n", m, lineno);
+            m *= 2;
+            point_t *new_bins = realloc(bins, m * sizeof(point_t));
+            if (!new_bins)
+                return load_error(
+                    fp, bins, "Failed to re-allocate buffer of size %zu at line %zu\n", m, lineno);
+            bins = new_bins;
         }
+        bins[l].count = count;
+        bins[l].total = total;
+        bins[l].unique = unique;
+        total += count * freq;
+        unique += freq;
+        prev_count = count;
+        ++l;
     }
     safe_close(fp);
 
     if (l == 0)
     {
-        free(points);
+        free(bins);
         fprintf(stderr, "Empty histogram file\n");
         return 1;
     }
     if (!isfinite(total))
     {
-        free(points);
+        free(bins);
         fprintf(stderr, "Overflow while accumulating histogram total\n");
         return 1;
     }
 
-    size_t stop = get_stop(points, l, total, cutoff);
+    size_t stop = get_stop(bins, l, total, cutoff);
     if (stop == 0)
     {
-        free(points);
+        free(bins);
         fprintf(stderr, "Cutoff (%g) was too small\n", cutoff);
         return 1;
     }
 
-    size_t start = get_start(points, stop);
+    size_t start = get_start(bins, stop);
     if (stop == start)
     {
-        free(points);
-        fprintf(stderr, "Insufficient points to estimate coverage\n");
+        free(bins);
+        fprintf(stderr, "Insufficient bins to estimate coverage\n");
         return 1;
     }
 
-    printf("%.6lf\n", estimate_coverage(points, l, start, stop));
-    free(points);
+    printf("%.6lf\n", estimate_coverage(bins, l, start, stop));
+    free(bins);
     return 0;
 }
