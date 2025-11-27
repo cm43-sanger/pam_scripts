@@ -75,6 +75,19 @@ static int load_error(FILE *fp, point_t *points, const char *fmt, ...)
     return 1;
 }
 
+static int parse_line(const char *line, double *count, double *freq)
+{
+    long long count_lld, freq_lld;
+    int consumed;
+    if (sscanf(line, "%lld %lld %n", &count_lld, &freq_lld, &consumed) != 2 ||
+        line[consumed] != '\0' ||
+        count_lld < 0 || freq_lld < 0)
+        return 1;
+    *count = count_lld;
+    *freq = freq_lld;
+    return 0;
+}
+
 static double estimate_threshold(const point_t *points, size_t l, double total, double cutoff)
 {
     double target = cutoff * total;
@@ -171,7 +184,7 @@ int main(int argc, char *argv[])
     double total = 0.0;
     double unique = 0.0;
     {
-        long long prev_count_lld = -1;
+        double prev_count = -1.0;
         char line[LINE_WIDTH];
         for (size_t lineno = 1; fgets(line, LINE_WIDTH, fp); lineno++)
         {
@@ -181,20 +194,20 @@ int main(int argc, char *argv[])
                 return load_error(fp, points,
                                   "Line %zu exceeded buffer size (%d):\n%s\n",
                                   lineno, LINE_WIDTH, line);
-            long long count_lld, freq_lld;
-            if (sscanf(line, "%lld %lld", &count_lld, &freq_lld) != 2 || count_lld < 0 || freq_lld < 0)
+            double count, freq;
+            if (parse_line(line, &count, &freq))
                 return load_error(fp, points, "Line %zu is invalid:\n%s\n", lineno, line);
-            if (count_lld <= prev_count_lld)
+            if (count <= prev_count)
                 return load_error(
                     fp, points, "Histogram count was not strictly increasing at line %zu\n", lineno);
-            prev_count_lld = count_lld;
-            if (count_lld == 0 || freq_lld == 0)
+            prev_count = count;
+            if (count == 0.0 || freq == 0.0)
                 continue;
             if (l == m)
             {
                 if (m > SIZE_MAX / (2 * sizeof(point_t)))
                     return load_error(
-                        fp, points, "Buffer too large (%zu) to re-allocate at line %zu\n", m, lineno);
+                        fp, points, "Buffer of size %zu too large to re-allocate at line %zu\n", m, lineno);
                 m *= 2;
                 point_t *new_points = realloc(points, m * sizeof(point_t));
                 if (!new_points)
@@ -202,8 +215,6 @@ int main(int argc, char *argv[])
                         fp, points, "Failed to re-allocate buffer of size %zu at line %zu\n", m, lineno);
                 points = new_points;
             }
-            double count = count_lld;
-            double freq = freq_lld;
             total += count * freq;
             unique += freq;
             if (!isfinite(total) || !isfinite(unique))
