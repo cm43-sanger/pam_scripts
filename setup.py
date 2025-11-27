@@ -1,18 +1,13 @@
 from setuptools import setup, Extension
-from Cython.Build import cythonize
-import numpy
 import pybind11
 import sys
 
-# --- Compile flags ---
-extra_compile_args_cpp = ["-O3", "-std=c++17", "-march=native"]
-extra_compile_args_cython = ["-O3", "-march=native"]
 
 if sys.platform == "win32":
     extra_compile_args_cpp = ["/O2", "/std:c++17"]
-    extra_compile_args_cython = ["/O2"]
+else:
+    extra_compile_args_cpp = ["-O3", "-std=c++17", "-march=native"]
 
-# --- C++ pybind11 extension ---
 kc_ext = Extension(
     "pam_scripts._kmc",
     sources=[
@@ -40,37 +35,4 @@ jaccard_ext = Extension(
     extra_compile_args=extra_compile_args_cpp,
 )
 
-# --- Cython extension ---
-# jaccard_ext = Extension(
-#     "pam_scripts._jaccard_similarity",
-#     sources=["src/pam_scripts/jaccard_similarity.pyx"],
-#     include_dirs=[numpy.get_include()],
-#     extra_compile_args=extra_compile_args_cython,
-# )
-# xxhash_ext = Extension(
-#     "pam_scripts._xxhash",
-#     sources=["src/pam_scripts/xxhash.pyx"],
-#     include_dirs=[numpy.get_include()],
-#     extra_compile_args=extra_compile_args_cython,
-# )
-
-# setup(
-#     name="pam_scripts",
-#     ext_modules=cythonize(
-#         [jaccard_ext, xxhash_ext],  # only Cython modules go through cythonize
-#         compiler_directives={"language_level": "3"},
-#         annotate=True,
-#     )
-#     + [kc_ext],  # add the C++ extensions directly
-# )
-
-setup(
-    name="pam_scripts",
-    # ext_modules=cythonize(
-    #     [jaccard_ext],  # only Cython modules go through cythonize
-    #     compiler_directives={"language_level": "3"},
-    #     annotate=True,
-    # )
-    # + [kc_ext, hash_ext],  # add the C++ extensions directly
-    ext_modules=[kc_ext, hash_ext, jaccard_ext],
-)
+setup(name="pam_scripts", ext_modules=[kc_ext, hash_ext, jaccard_ext])
