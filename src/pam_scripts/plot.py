@@ -53,7 +53,6 @@ def plot_embedding(
         subset = embedding[embedding["label"] == label]
         x, y = bounding_square(subset["x"], subset["y"])
         axis.plot(x, y, "k:", linewidth=1.0)
-        # axis.text(max(x) + 0.05, max(y) + 0.05, label, ha="left", va="bottom")
         axis.text(max(x), max(y), label, fontsize=8, ha="left", va="bottom")
     axis.set_xlabel("$X$")
     axis.set_ylabel("$Y$")

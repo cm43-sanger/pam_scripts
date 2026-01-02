@@ -1,0 +1,1 @@
+2026-01-02 10:13:50	-	cranky_archimedes	-	81b943eda6495399da20f474d7d5ac23	63e880e0-407b-4490-b6b6-50f8915d2964	nextflow run ../pam_scripts/src/pam_scripts/setup_genomes_cross.nf --manifest cholera_manifest.csv --output_directory results --keep_intermediate --force

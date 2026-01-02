@@ -24,8 +24,14 @@ kpy-count = "pam_scripts.kmc:main"
 kpy-sketch = "pam_scripts.sketch:main"
 kpy-triangle = "pam_scripts.triangle:main"
 kpy-embed = "pam_scripts.embed:main"
+kpy-embed2 = "pam_scripts.embed2:main"
 kpy-plot = "pam_scripts.plot:main"
+kpy-compare = "pam_scripts.compare:main"
 filter-sig = "pam_scripts.filter_sig:main"
+sourmash2phylip = "pam_scripts.sourmash2phylip:main"
+sourmash2clusters = "pam_scripts.sourmash2clusters:main"
+cluster2sketch = "pam_scripts.cluster2sketch:main"
+mergeClusters = "pam_scripts.mergeClusters:main"
 
 [tool.setuptools.dynamic]
 dependencies = { file = ["requirements.txt"] }

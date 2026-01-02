@@ -264,6 +264,19 @@ int main(int argc, char *argv[])
     }
 
     free(points);
-    printf("%.6lf\n", (high_total - low_total) / (high_unique - low_unique));
+
+    double coverage = (high_total - low_total) / (high_unique - low_unique);
+    printf("%.6lf\n", coverage);
+
+    fprintf(stderr, "Cutoff: %g\n", cutoff);
+    fprintf(stderr, "Threshold: %.3lf\n", threshold);
+    fprintf(stderr, "Total kmers: %.0lf\n", total);
+    fprintf(stderr, "Unique kmers: %.0lf\n", unique);
+    fprintf(stderr, "Total kmers below sqrt(threshold): %.0lf\n", low_total);
+    fprintf(stderr, "Unique kmers below sqrt(threshold): %.0lf\n", low_unique);
+    fprintf(stderr, "Total kmers above threshold: %.0lf\n", total - high_total);
+    fprintf(stderr, "Unique kmers above threshold: %.0lf\n", unique - high_unique);
+    fprintf(stderr, "Coverage: %.3lf\n", coverage);
+
     return 0;
 }
