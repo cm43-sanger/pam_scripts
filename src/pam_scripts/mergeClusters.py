@@ -39,7 +39,7 @@ def main():
         "manysketch/SOURMASH-MANIFEST.csv", comment="#", index_col="name"
     )
     embedding = pd.read_csv("embedding.tsv", sep="\t").drop_duplicates("label")
-    embedding["label"] = embedding["label"].str.split(".", n=1).str[0]
+    embedding["label"] = embedding["label"].astype(str).str.split(".", n=1).str[0]
     embedding_clusters = embedding.groupby("density_label")
     for label, rows in embedding_clusters:
         process_cluster(manifest, label, rows)
