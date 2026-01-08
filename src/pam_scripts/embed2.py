@@ -12,7 +12,7 @@ from sklearn.cluster import DBSCAN
 from sklearn.decomposition import PCA
 from . import _core, pam_io
 
-DEFAULT_THRESHOLD = 0.02
+DEFAULT_THRESHOLD = 0.001
 DEFAULT_EPS = 0.05
 DEFAULT_MIN_SAMPLES = 5
 

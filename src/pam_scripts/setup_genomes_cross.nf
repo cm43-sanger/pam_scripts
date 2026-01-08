@@ -8,7 +8,9 @@ params.kmer_size = 21
 params.force = false
 params.keep_intermediate = false
 
-def invalidChars = ['(', ')', '|', '&', '<', '>', ';', ':', '"', "'", '`', '\\', '*', '?']
+def invalidChars = [
+    '(', ')', '|', '&', '<', '>', ';', ':', '"', "'", '`', '\\', '*', '?'
+]
 
 def usage = """Usage:
   nextflow run process_manifest.nf [options] --manifest MANIFEST 
@@ -79,10 +81,32 @@ process manysketch {
 
     script:
     """
+    x="test"
+    echo \$x > test.txt
     awk -F',' 'BEGIN { print "name,genome_filename,protein_filename" } { print \$1 "," \$2 "," "" }' "${manifest}" > manysketch_manifest.csv
     sourmash scripts manysketch --output=manysketch.zip --param-string='k=$params.kmer_size,scaled=1000,dna' manysketch_manifest.csv
     """
 }
+
+// process manysketch {
+//     cpus 11
+//     publishDir "$params.output_directory", mode: 'copy', pattern: "*"
+
+//     input:
+//     path(manifest)
+
+//     output:
+//     // path("manysketch.zip")
+//     tuple path("manysketch.zip"), path("test.txt")
+
+//     script:
+//     """
+//     x="test"
+//     echo \$x > test.txt
+//     awk -F',' 'BEGIN { print "name,genome_filename,protein_filename" } { print \$1 "," \$2 "," "" }' "${manifest}" > manysketch_manifest.csv
+//     sourmash scripts manysketch --output=manysketch.zip --param-string='k=$params.kmer_size,scaled=1000,dna' manysketch_manifest.csv
+//     """
+// }
 
 process estimate_ani {
     cpus 11
@@ -167,27 +191,64 @@ process merge_clusters {
     """
 }
 
+// process assemble_gfa {
+//     cpus 1
+//     publishDir "$params.output_directory", mode: 'copy', pattern: "graphs/*.gfa"
+//     // publishDir "$params.output_directory", mode: 'copy', pattern: "graphs/*.fa"
+
+//     input:
+//     path(cluster)
+
+//     output:
+//     path("graphs/*.fa")
+
+//     script:
+//     """
+//     base=\$(basename "$cluster" .csv)
+//     mkdir -p graphs
+//     cut -d',' -f2 "$cluster" | xargs cat > "graphs/\${base}.fa"
+//     AlfaPang "graphs/\${base}.fa" "graphs/\${base}.gfa" $params.kmer_size
+//     """
+//     // AlfaPang sequences.fa graphs/${cluster}.gfa $params.kmer_size
+//     // xargs cat < $cluster > "graphs/$(basename clusters/mycluster.csv .csv).fa"
+//     // xargs cat < "$cluster" > "graphs/\${base}.fa"
+// }
+
 process assemble_gfa {
-    cpus 11
-    publishDir "$params.output_directory", mode: 'copy', pattern: "graphs/*.gfa"
-    // publishDir "$params.output_directory", mode: 'copy', pattern: "graphs/*.fa"
+    cpus 1
+    // publishDir "$params.output_directory", mode: 'copy', pattern: "graphs/*.gfa"
+    publishDir "$params.output_directory", mode: 'copy', pattern: "graphs/*"
 
     input:
     path(cluster)
 
     output:
-    path("graphs/*.fa")
+    tuple path("graphs/*.gfa"), path("graphs/*.num")
 
     script:
     """
     base=\$(basename "$cluster" .csv)
     mkdir -p graphs
+    wc -l < "$cluster" > "graphs/\${base}.num"
     cut -d',' -f2 "$cluster" | xargs cat > "graphs/\${base}.fa"
     AlfaPang "graphs/\${base}.fa" "graphs/\${base}.gfa" $params.kmer_size
     """
-    // AlfaPang sequences.fa graphs/${cluster}.gfa $params.kmer_size
-    // xargs cat < $cluster > "graphs/$(basename clusters/mycluster.csv .csv).fa"
-    // xargs cat < "$cluster" > "graphs/\${base}.fa"
+}
+
+process smooth_gfa {
+    cpus 11
+    publishDir "$params.output_directory", mode: 'copy', pattern: "graphs/*.gfa.smoothed"
+
+    input:
+    tuple path(graph), val(num)
+
+    output:
+    path("graphs/*.gfa.smoothed")
+
+    script:
+    """
+    smoothxg -t${task.cpus} -r${num} "graphs/${graph}" -o "graphs/${graph}.smoothed"
+    """
 }
 
 workflow {
@@ -220,8 +281,14 @@ workflow {
     cluster_filenames = clusters
         .map { filenames, signatures -> filenames }
         .flatten()
+    // clusters.view()
     // cluster_filenames.view()
-    assemble_gfa(clusters.flatten())
+    // assemble_gfa(clusters.flatten())
+    raw_gfas = assemble_gfa(cluster_filenames)
+    raw_gfas2 = raw_gfas
+        .map { graph, num -> tuple(graph, num.text.trim().toInteger()) }
+    raw_gfas2.view()
+    // smoothed_gfas = smooth_gfa(raw_gfas2)
 
     // zip_files = Channel.fromPath('clusters/*.zip')
     // zip_files = Channel.fromPath('*.zip')
