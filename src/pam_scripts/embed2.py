@@ -88,6 +88,7 @@ def embed_distances(
     )
     density_labels = clusters.labels_
     labels = ["unclustered"] * len(names)
+    labels2 = ["unclustered"] * len(names)
     for density_label in range(density_labels.max() + 1):
         (indices,) = np.nonzero(density_labels == density_label)
         if indices.size == 0:
@@ -103,15 +104,18 @@ def embed_distances(
             with open(f"{ooer}.txt", "w") as f:
                 for i in idx:
                     print(names[indices[i]], file=f)
-                    labels[indices[i]] = ooer
-    return (names, z, labels)
+                    labels[indices[i]] = density_label + 1
+                    labels2[indices[i]] = sub_label + 1
+    return (names, z, labels, labels2)
 
 
-def write_embedding(filename: str, names: list[str], z, labels: list[str]):
+def write_embedding(
+    filename: str, names: list[str], z, labels: list[str], sub_labels: list[str]
+):
     with pam_io.get_output_handle(filename) as f:
-        print("name", "x", "y", "label", sep="\t", file=f)
-        for name, (x, y), label in zip(names, z, labels):
-            print(name, x, y, label, sep="\t", file=f)
+        print("name", "x", "y", "label", "sub_label", sep="\t", file=f)
+        for name, (x, y), label, sub_label in zip(names, z, labels, sub_labels):
+            print(name, x, y, label, sub_label, sep="\t", file=f)
 
 
 def main():
@@ -174,7 +178,7 @@ def main():
     if args.hierarchical:
         raise NotImplementedError("no HDBSCAN pls")
 
-    names, z, clusters = embed_distances(
+    names, z, clusters, sub_clusters = embed_distances(
         args.input_phylip,
         threshold=args.threshold,
         seed=args.seed,
@@ -183,7 +187,7 @@ def main():
         min_samples=args.min_samples,
         num_jobs=args.num_jobs,
     )
-    write_embedding(args.output_tsv, names, z, clusters)
+    write_embedding(args.output_tsv, names, z, clusters, sub_clusters)
 
 
 if __name__ == "__main__":
