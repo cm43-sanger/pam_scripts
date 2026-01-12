@@ -175,6 +175,8 @@ process merge_clusters {
     cpus 11
     // publishDir "$params.output_directory/clusters", mode: 'copy', pattern: "cluster/*.sig.gz"
     publishDir "$params.output_directory", mode: 'copy', pattern: "signatures/*.sig.gz"
+    publishDir "$params.output_directory", mode: 'copy', pattern: "clusters/*.csv"
+    // publishDir "$params.output_directory", mode: 'copy', pattern: ["signatures/*.sig.gz", "clusters/*.csv"]
 
     input:
     tuple path(zip), path(cluster)
@@ -237,17 +239,45 @@ process assemble_gfa {
 
 process smooth_gfa {
     cpus 11
+    // publishDir "$params.output_directory", mode: 'copy', pattern: "*.list"
     publishDir "$params.output_directory", mode: 'copy', pattern: "graphs/*.gfa.smoothed"
 
     input:
     tuple path(graph), val(num)
 
     output:
+    // path("*.list")
     path("graphs/*.gfa.smoothed")
 
     script:
+    // """
+    // ls -lh > "${graph}.list"
+    // """
     """
-    smoothxg -t${task.cpus} -r${num} "graphs/${graph}" -o "graphs/${graph}.smoothed"
+    mkdir -p graphs
+    smoothxg -t${task.cpus} -r${num} -g"${graph}" -o"graphs/${graph}.smoothed"
+    """
+}
+
+process fix_gfa {
+    cpus 11
+    // publishDir "$params.output_directory", mode: 'copy', pattern: "*.list"
+    publishDir "$params.output_directory", mode: 'copy', pattern: "graphs/*.gfa.smoothed.fixed"
+
+    input:
+    path(graph)
+
+    output:
+    // path("*.list")
+    path("graphs/*.gfa.smoothed.fixed")
+
+    script:
+    // """
+    // ls -lh > "${graph}.list"
+    // """
+    """
+    mkdir -p graphs
+    gfaffix -p${task.cpus} -o"graphs/${graph}.fixed" "${graph}"
     """
 }
 
@@ -281,14 +311,18 @@ workflow {
     cluster_filenames = clusters
         .map { filenames, signatures -> filenames }
         .flatten()
+        // .buffer(size: 10)
+        // .last()
+        // .flatten()
     // clusters.view()
     // cluster_filenames.view()
     // assemble_gfa(clusters.flatten())
     raw_gfas = assemble_gfa(cluster_filenames)
     raw_gfas2 = raw_gfas
         .map { graph, num -> tuple(graph, num.text.trim().toInteger()) }
-    raw_gfas2.view()
-    // smoothed_gfas = smooth_gfa(raw_gfas2)
+    // raw_gfas2.view()
+    smoothed_gfas = smooth_gfa(raw_gfas2)
+    fixed_gfas = fix_gfa(smoothed_gfas)
 
     // zip_files = Channel.fromPath('clusters/*.zip')
     // zip_files = Channel.fromPath('*.zip')
