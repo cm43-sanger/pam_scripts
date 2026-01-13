@@ -81,8 +81,6 @@ process manysketch {
 
     script:
     """
-    x="test"
-    echo \$x > test.txt
     awk -F',' 'BEGIN { print "name,genome_filename,protein_filename" } { print \$1 "," \$2 "," "" }' "${manifest}" > manysketch_manifest.csv
     sourmash scripts manysketch --output=manysketch.zip --param-string='k=$params.kmer_size,scaled=1000,dna' manysketch_manifest.csv
     """
@@ -193,32 +191,8 @@ process merge_clusters {
     """
 }
 
-// process assemble_gfa {
-//     cpus 1
-//     publishDir "$params.output_directory", mode: 'copy', pattern: "graphs/*.gfa"
-//     // publishDir "$params.output_directory", mode: 'copy', pattern: "graphs/*.fa"
-
-//     input:
-//     path(cluster)
-
-//     output:
-//     path("graphs/*.fa")
-
-//     script:
-//     """
-//     base=\$(basename "$cluster" .csv)
-//     mkdir -p graphs
-//     cut -d',' -f2 "$cluster" | xargs cat > "graphs/\${base}.fa"
-//     AlfaPang "graphs/\${base}.fa" "graphs/\${base}.gfa" $params.kmer_size
-//     """
-//     // AlfaPang sequences.fa graphs/${cluster}.gfa $params.kmer_size
-//     // xargs cat < $cluster > "graphs/$(basename clusters/mycluster.csv .csv).fa"
-//     // xargs cat < "$cluster" > "graphs/\${base}.fa"
-// }
-
 process assemble_gfa {
     cpus 1
-    // publishDir "$params.output_directory", mode: 'copy', pattern: "graphs/*.gfa"
     publishDir "$params.output_directory", mode: 'copy', pattern: "graphs/*"
 
     input:
@@ -232,7 +206,19 @@ process assemble_gfa {
     base=\$(basename "$cluster" .csv)
     mkdir -p graphs
     wc -l < "$cluster" > "graphs/\${base}.num"
-    cut -d',' -f2 "$cluster" | xargs cat > "graphs/\${base}.fa"
+    awk -F',' '{
+        name=\$1; file=\$2;
+        idx=0;
+        while ( getline seq < file ) {
+            if ( seq ~ /^>/ ) {
+                idx++;
+                print ">" name "_" idx
+            } else {
+                print seq
+            }
+        }
+        close(file)
+    }' "$cluster" > "graphs/\${base}.fa"
     AlfaPang "graphs/\${base}.fa" "graphs/\${base}.gfa" $params.kmer_size
     """
 }

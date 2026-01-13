@@ -17,17 +17,25 @@ def process_cluster(manifest, label, rows):
 
 def merge_signatures(cluster):
     label, paths = cluster
+    filename = f"signatures/{label}.sig.gz"
     args = [
         "sourmash",
         "sig",
         "merge",
         "--quiet",
-        f"--output=signatures/{label}.sig.gz",
+        f"--output={filename}",
         f"--set-name={label}",
     ]
     args.extend(paths)
     subprocess.run(args, check=True)
-    return label
+    return filename
+
+
+def index_clusters(clusters):
+    args = ["sourmash", "index", "clusters.sbt.zip"]
+    with ThreadPoolExecutor() as executor:
+        args.extend(executor.map(merge_signatures, clusters))
+    subprocess.run(args, check=True)
 
 
 def main():
@@ -42,13 +50,9 @@ def main():
     embedding_clusters = embedding.drop_duplicates(
         subset=("label", "sub_label")
     ).groupby("label")
-    for label, rows in embedding_clusters:
-        process_cluster(manifest, label, rows)
     clusters = (
         process_cluster(manifest, label, rows)
         for label, rows in embedding_clusters
         if label != "unclustered"
     )
-    with ThreadPoolExecutor() as executor:
-        for label in executor.map(merge_signatures, clusters):
-            pass
+    index_clusters(clusters)
