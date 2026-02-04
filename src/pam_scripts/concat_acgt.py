@@ -49,22 +49,24 @@ def main():
         return 1
     manifest_path = sys.argv[1]
     out_path = sys.argv[2]
-    input_files: dict[str, str] = {}
+    rows_lookup: dict[str, str] = {}
     with open(manifest_path) as manifest:
         for line in manifest:
             line = line.strip()
             if not line:
                 continue
             name, path = line.split(",")
-            if name in input_files:
+            if name in rows_lookup:
                 raise ValueError(f"duplicate name: {name!r}")
-            input_files[name] = path
-    ordered_rows = sorted(input_files.items(), key=operator.itemgetter(0))
+            rows_lookup[name] = path
+    ordered_rows = sorted(rows_lookup.items(), key=operator.itemgetter(0))
     with (
         TemporaryDirectory() as working_directory,
         Pool(initializer=worker_init, initargs=(working_directory,)) as pool,
         make_progressbar(
-            pool.imap(worker_func, ordered_rows), "Processing files"
+            pool.imap(worker_func, ordered_rows),
+            desc="Processing files",
+            total=len(ordered_rows),
         ) as progressbar,
         open(out_path, "wb") as out,
     ):
