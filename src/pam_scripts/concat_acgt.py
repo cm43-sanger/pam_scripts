@@ -28,11 +28,13 @@ def worker_func(row: tuple[str, str]):
         )
     name, path = row
     fa_path = os.path.join(__working_directory, f"{name}.fa")
+    dropped_bases = 0
     with open(fa_path, "w") as fa:
         for contig, record in enumerate(SeqIO.parse(path, "fasta"), start=1):
             frag = 1
             for seq in re.split(AMBIGUOUS_REGEX, str(record.seq).upper()):
                 if len(seq) < 300:
+                    dropped_bases += len(seq)
                     continue
                 SeqIO.write(
                     SeqRecord(Seq(seq), id=f"{name}#{contig}_{frag}", description=""),
@@ -40,7 +42,7 @@ def worker_func(row: tuple[str, str]):
                     "fasta",
                 )
                 frag += 1
-    return fa_path
+    return fa_path, dropped_bases
 
 
 def main():
@@ -60,6 +62,7 @@ def main():
                 raise ValueError(f"duplicate name: {name!r}")
             rows_lookup[name] = path
     ordered_rows = sorted(rows_lookup.items(), key=operator.itemgetter(0))
+    total_dropped_bases = 0
     with (
         TemporaryDirectory() as working_directory,
         Pool(initializer=worker_init, initargs=(working_directory,)) as pool,
@@ -67,10 +70,13 @@ def main():
             pool.imap(worker_func, ordered_rows),
             desc="Processing files",
             total=len(ordered_rows),
+            postfix={"Dropped bases": total_dropped_bases},
         ) as progressbar,
         open(out_path, "wb") as out,
     ):
-        for fa_path in progressbar:
+        for fa_path, dropped_bases in progressbar:
+            total_dropped_bases += dropped_bases
+            progressbar.set_postfix({"Dropped bases": total_dropped_bases})
             with open(fa_path, "rb") as fa:
                 shutil.copyfileobj(fa, out)
             os.remove(fa_path)
