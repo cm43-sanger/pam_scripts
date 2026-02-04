@@ -1,3 +1,4 @@
+hdbscan
 h5py
 matplotlib
 networkx

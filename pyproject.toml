@@ -32,6 +32,7 @@ sourmash2phylip = "pam_scripts.sourmash2phylip:main"
 sourmash2clusters = "pam_scripts.sourmash2clusters:main"
 cluster2sketch = "pam_scripts.cluster2sketch:main"
 mergeClusters = "pam_scripts.mergeClusters:main"
+concat_acgt = "pam_scripts.concat_acgt:main"
 
 [tool.setuptools.dynamic]
 dependencies = { file = ["requirements.txt"] }
