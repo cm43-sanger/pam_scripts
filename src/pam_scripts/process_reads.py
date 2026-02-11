@@ -69,7 +69,7 @@ def get_parser():
     )
     parser.add_argument(
         "-o",
-        "--output",
+        "--output_directory",
         required=True,
         help="Output directory for sketches and results",
     )
