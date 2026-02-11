@@ -26,6 +26,7 @@ class Comparer:
             [
                 "sourmash",
                 "sketch",
+                "dna",
                 "--param-string",
                 f"k={self.kmer_size},scaled={self.scaled}",
                 "--output",
