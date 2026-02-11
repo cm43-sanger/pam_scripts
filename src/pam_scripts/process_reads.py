@@ -40,7 +40,16 @@ class Comparer:
 
     def find_closest(self, query: str, closest: str):
         subprocess.run(
-            ["sourmash", "search", query, self.index, "--output", closest], check=True
+            [
+                "sourmash",
+                "search",
+                query,
+                self.index,
+                "--containment",
+                "--output",
+                closest,
+            ],
+            check=True,
         )
 
     def process_reads(self, read_paths: tuple[str], output_directory: str):
