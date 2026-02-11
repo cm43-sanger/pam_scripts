@@ -29,6 +29,8 @@ class Comparer:
                 "dna",
                 "--param-string",
                 f"k={self.kmer_size},scaled={self.scaled}",
+                "--set-name",
+                "query",
                 "--output",
                 sig,
                 *read_paths,
