@@ -60,6 +60,7 @@ class Comparer:
         self.find_closest(query, closest)
         df = pd.read_csv(closest)
         print(df)
+        print(df["ani"])
 
 
 def get_parser():
