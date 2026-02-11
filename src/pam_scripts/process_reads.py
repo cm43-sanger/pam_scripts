@@ -79,7 +79,7 @@ def get_parser():
 def main():
     parser = get_parser()
     args = parser.parse_args()
-    comparer = Comparer(args.index)
+    comparer = Comparer(args.directory)
     comparer.process_reads(args.read, args.output_directory)
 
 
