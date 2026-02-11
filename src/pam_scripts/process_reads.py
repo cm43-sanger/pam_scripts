@@ -60,7 +60,9 @@ class Comparer:
         self.find_closest(query, closest)
         df = pd.read_csv(closest)
         print(df)
-        print(df["ani"])
+        max_ani_row = df.loc[df["ani"].idxmax()]
+        best_name = max_ani_row["name"]
+        print(best_name)
 
 
 def get_parser():
