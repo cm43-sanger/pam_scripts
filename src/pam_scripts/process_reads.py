@@ -56,15 +56,15 @@ def get_parser():
     )
     parser.add_argument(
         "-i",
-        "--index",
+        "--directory",
         required=True,
-        help="Path to the SBT index or signature collection",
+        help="Path to the pipeline output directory",
     )
     parser.add_argument(
         "-r",
-        "--reads",
+        "--read",
+        action="append",
         required=True,
-        nargs="+",
         help="One or more read files to sketch",
     )
     parser.add_argument(
@@ -80,7 +80,7 @@ def main():
     parser = get_parser()
     args = parser.parse_args()
     comparer = Comparer(args.index)
-    comparer.process_reads(args.read_paths, args.output_directory)
+    comparer.process_reads(args.read, args.output_directory)
 
 
 # import argparse
