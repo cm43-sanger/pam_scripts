@@ -22,7 +22,7 @@ class Comparer:
         return os.path.join(self.directory, "clusters.sbt.zip")
 
     def graph(self, name: str):
-        return os.path.join(self.directory, f"{name}.giraffe.gbz")
+        return os.path.join(self.directory, "graphs", f"{name}.giraffe.gbz")
 
     def sketch_reads(self, reads: tuple[str], sig: str):
         subprocess.run(
