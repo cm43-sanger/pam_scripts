@@ -21,7 +21,7 @@ class Comparer:
     def index(self):
         return os.path.join(self.directory, "clusters.sbt.zip")
 
-    def sketch_reads(self, read_paths: tuple[str], sig: str):
+    def sketch_reads(self, reads: tuple[str], sig: str):
         subprocess.run(
             [
                 "sourmash",
@@ -33,7 +33,7 @@ class Comparer:
                 "query",
                 "--output",
                 sig,
-                *read_paths,
+                *reads,
             ],
             check=True,
         )
@@ -52,10 +52,18 @@ class Comparer:
             check=True,
         )
 
-    def process_reads(self, read_paths: tuple[str], output_directory: str):
+    def map_reads(self, graph: str, reads: tuple[str], gam: str):
+        args = ["vg", "giraffe", "--gbz-name", graph]
+        for read in reads:
+            args.append("--fastq-in")
+            args.append(read)
+        with open(gam, "wb") as f:
+            subprocess.run(args, stdout=f, check=True)
+
+    def process_reads(self, reads: tuple[str], output_directory: str):
         os.makedirs(output_directory, exist_ok=True)
         query = os.path.join(output_directory, "sketch.sig")
-        self.sketch_reads(read_paths, query)
+        self.sketch_reads(reads, query)
         closest = os.path.join(output_directory, "closest.csv")
         self.find_closest(query, closest)
         df = pd.read_csv(closest)
@@ -63,6 +71,8 @@ class Comparer:
         max_ani_row = df.loc[df["ani"].idxmax()]
         best_name = max_ani_row["name"]
         print(best_name)
+        graph = os.path.join(output_directory, f"{best_name}.giraffe.gbz")
+        gam = os.path.join(output_directory, "alignments.gam")
 
 
 def get_parser():
@@ -114,7 +124,7 @@ def main():
 #     kmer_length: int = DEFAULT_KMER_LENGTH
 #     scaled: float = DEFAULT_SCALED
 
-#     def sketch_reads(self, read_paths: tuple[str], sig: str):
+#     def sketch_reads(self, reads: tuple[str], sig: str):
 #         subprocess.run(
 #             [
 #                 "sourmash",
@@ -123,7 +133,7 @@ def main():
 #                 f"k={self.kmer_length},scaled={self.scaled}",
 #                 "--output",
 #                 sig,
-#                 *read_paths,
+#                 *reads,
 #             ],
 #             check=True,
 #         )
@@ -133,10 +143,10 @@ def main():
 #             ["sourmash", "search", query, self.index, "--output", closest], check=True
 #         )
 
-#     def process_reads(self, read_paths: tuple[str], output_directory: str):
+#     def process_reads(self, reads: tuple[str], output_directory: str):
 #         os.makedirs(output_directory, exist_ok=True)
 #         query = os.path.join(output_directory, "sketch.sig")
-#         self.sketch_reads(read_paths, query)
+#         self.sketch_reads(reads, query)
 #         closest = os.path.join(output_directory, "closest.csv")
 #         self.find_closest(query, closest)
 #         df = pd.read_csv(closest)
@@ -182,4 +192,4 @@ def main():
 #     parser = get_parser()
 #     args = parser.parse_args()
 #     comparer = Comparer(args.index, kmer_length=args.kmer_length, scaled=args.scaled)
-#     comparer.process_reads(read_paths, output_directory)
+#     comparer.process_reads(reads, output_directory)
