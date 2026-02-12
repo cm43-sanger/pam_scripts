@@ -21,9 +21,6 @@ class Comparer:
     def index(self):
         return os.path.join(self.directory, "clusters.sbt.zip")
 
-    def graph(self, name: str):
-        return os.path.join(self.directory, "graphs", f"{name}.giraffe.gbz")
-
     def sketch_reads(self, reads: tuple[str], sig: str):
         subprocess.run(
             [
@@ -55,8 +52,20 @@ class Comparer:
             check=True,
         )
 
-    def map_reads(self, graph: str, reads: tuple[str], gam: str):
-        args = ["vg", "giraffe", "--gbz-name", graph]
+    def map_reads(self, name: str, reads: tuple[str], gam: str):
+        basename = os.path.join(self.directory, "graphs", name)
+        args = [
+            "vg",
+            "giraffe",
+            "--gbz-name",
+            f"{basename}.giraffe.gbz",
+            "--minimizer-name",
+            f"{basename}.shortread.withzip.min",
+            "--zipcode-name",
+            f"{basename}.shortread.zipcodes",
+            "--dist-name",
+            f"{basename}.dist",
+        ]
         for read in reads:
             args.append("--fastq-in")
             args.append(read)
@@ -75,7 +84,7 @@ class Comparer:
         best_name = max_ani_row["name"]
         print(best_name)
         gam = os.path.join(output_directory, "alignments.gam")
-        self.map_reads(self.graph(best_name), reads, gam)
+        self.map_reads(best_name, reads, gam)
 
 
 def get_parser():
