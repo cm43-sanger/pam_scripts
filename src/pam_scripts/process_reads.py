@@ -53,6 +53,7 @@ class Comparer:
         )
 
     def map_reads(self, name: str, reads: tuple[str], gam: str):
+        name = str(name)
         basename = os.path.join(self.directory, "graphs", name)
         args = [
             "vg",
