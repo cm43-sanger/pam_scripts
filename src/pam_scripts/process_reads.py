@@ -73,6 +73,7 @@ class Comparer:
         print(best_name)
         graph = os.path.join(output_directory, f"{best_name}.giraffe.gbz")
         gam = os.path.join(output_directory, "alignments.gam")
+        self.map_reads(graph, reads, gam)
 
 
 def get_parser():
