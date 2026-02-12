@@ -56,7 +56,7 @@ class Comparer:
     def map_reads(self, name, reads: tuple[str], gam: str):
         name = str(name)
         basename = os.path.join(self.directory, "graphs", name)
-        print(f"Mapping to {basename!r}", file=sys.stderr)
+        print(f"Mapping to {basename + '.*'!r}", file=sys.stderr)
         args = [
             "vg",
             "giraffe",
