@@ -45,7 +45,7 @@ class Comparer:
                 "search",
                 query,
                 self.index,
-                "--max_containment",
+                "--max-containment",
                 "--estimate-ani-ci",
                 "--output",
                 closest,
