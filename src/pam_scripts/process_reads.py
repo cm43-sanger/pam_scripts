@@ -21,6 +21,9 @@ class Comparer:
     def index(self):
         return os.path.join(self.directory, "clusters.sbt.zip")
 
+    def graph(self, name: str):
+        return os.path.join(self.directory, f"{name}.giraffe.gbz")
+
     def sketch_reads(self, reads: tuple[str], sig: str):
         subprocess.run(
             [
@@ -71,9 +74,8 @@ class Comparer:
         max_ani_row = df.loc[df["ani"].idxmax()]
         best_name = max_ani_row["name"]
         print(best_name)
-        graph = os.path.join(output_directory, f"{best_name}.giraffe.gbz")
         gam = os.path.join(output_directory, "alignments.gam")
-        self.map_reads(graph, reads, gam)
+        self.map_reads(self.graph(best_name), reads, gam)
 
 
 def get_parser():
