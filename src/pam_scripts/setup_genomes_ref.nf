@@ -10,6 +10,11 @@ params.force = false
 params.keep_intermediate = false
 params.percent_identity = 90
 
+Failing because out of space - clear up some
+Remake pggb environment with latest pggb and vg=0.17.0
+
+// fasta files for pggb don't seem large enough?
+
 def invalidChars = [
     '(', ')', '|', '&', '<', '>', ';', ':', '"', "'", '`', '\\', '*', '?'
 ]
@@ -114,7 +119,7 @@ process merge_clusters {
     """
 }
 
-process assemble_gfa {
+process make_fa {
     cpus 11
     publishDir "$params.output_directory", mode: 'copy', pattern: "graphs/*"
 
@@ -125,13 +130,45 @@ process assemble_gfa {
     path("graphs/*")
 
     script:
-    """
+        """
     base=\$(basename "$cluster" .csv)
     n_haplotypes=\$(wc -l < "$cluster")
     fasta="graphs/\${base}.fa"
     echo \$fasta
     mkdir -p graphs
-    mkdir -p temp
+    awk -F',' '{
+        name=\$1; file=\$2;
+        idx=0;
+        while ( getline seq < file ) {
+            if ( seq ~ /^>/ ) {
+                idx++;
+                print ">" name "#" idx
+            } else {
+                print seq
+            }
+        }
+        close(file)
+    }' "$cluster" > "\$fasta"
+    """
+}
+
+process assemble_gfa {
+    cpus 11
+    publishDir "$params.output_directory", mode: 'copy', pattern: "graphs/*"
+
+    input:
+    path(cluster)
+
+    output:
+    tuple path(cluster), path("graphs/*.gfa"), path("graphs/*")
+
+    script:
+        """
+    base=\$(basename "$cluster" .csv)
+    n_haplotypes=\$(wc -l < "$cluster")
+    fasta="graphs/\${base}.fa"
+    echo \$fasta
+    mkdir -p graphs
     awk -F',' '{
         name=\$1; file=\$2;
         idx=0;
@@ -148,19 +185,75 @@ process assemble_gfa {
     samtools faidx "\$fasta"
     if [[ \${n_haplotypes} -eq 1 ]]; then
         echo "Skipping $cluster (only one entry)"
+        > "graphs/\${base}.empty.gfa"
     else
         pggb \
             --input-fasta="\$fasta" \
+            --n-haps=\${n_haplotypes} \
             --map-pct-id=$params.percent_identity \
             --mash-kmer=$params.kmer_size \
-            --n-haplotypes=\${n_haplotypes} \
             --output-dir=graphs \
-            --temp-dir=temp \
             --threads=11
     fi
     awk '/^>/ {name=\$1; if(name in seen){print "Duplicate: " name; exit 1} seen[name]=1}' "\$fasta"
     ls -lh
     ls -lh graphs/
+    """
+    // """
+    // base=\$(basename "$cluster" .csv)
+    // n_haplotypes=\$(wc -l < "$cluster")
+    // fasta="graphs/\${base}.fa"
+    // echo \$fasta
+    // mkdir -p graphs
+    // mkdir -p temp
+    // awk -F',' '{
+    //     name=\$1; file=\$2;
+    //     idx=0;
+    //     while ( getline seq < file ) {
+    //         if ( seq ~ /^>/ ) {
+    //             idx++;
+    //             print ">" name "#" idx
+    //         } else {
+    //             print seq
+    //         }
+    //     }
+    //     close(file)
+    // }' "$cluster" > "\$fasta"
+    // samtools faidx "\$fasta"
+    // if [[ \${n_haplotypes} -eq 1 ]]; then
+    //     echo "Skipping $cluster (only one entry)"
+    //     > "graphs/\${base}.empty.gfa"
+    // else
+    //     pggb \
+    //         --input-fasta="\$fasta" \
+    //         --map-pct-id=$params.percent_identity \
+    //         --mash-kmer=$params.kmer_size \
+    //         --n-haplotypes=\${n_haplotypes} \
+    //         --output-dir=graphs \
+    //         --temp-dir=temp \
+    //         --threads=11
+    // fi
+    // awk '/^>/ {name=\$1; if(name in seen){print "Duplicate: " name; exit 1} seen[name]=1}' "\$fasta"
+    // ls -lh
+    // ls -lh graphs/
+    // """
+}
+
+process autoindex {
+    cpus 11
+    publishDir "$params.output_directory", mode: 'copy', pattern: "graphs/*"
+    // conda "vg==1.70"
+
+    input:
+    tuple path(cluster), path(gfa)
+
+    output:
+    path("graphs/*")
+
+    script:
+    """
+    base=\$(basename "$cluster" .csv)
+    vg autoindex --workflow=giraffe --gfa="$gfa" --prefix="graphs/\${base}" --threads=11
     """
 }
 
@@ -190,5 +283,10 @@ workflow {
     cluster_filenames = clusters
         .map { filenames, signatures -> filenames }
         .flatten()
-    gfas = assemble_gfa(cluster_filenames)
+    make_fa(cluster_filenames)
+    graphs = assemble_gfa(cluster_filenames)
+    gfas = graphs
+        .filter { cluster, gfa, files -> !gfa.name.contains('empty') }
+        .map { cluster, gfa, files -> tuple cluster, gfa }
+    indices = autoindex(gfas)
 }

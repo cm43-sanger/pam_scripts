@@ -4,6 +4,7 @@ import subprocess
 import sys
 import pandas as pd
 
+Failing because out of space - clear up some
 
 class Comparer:
     directory: str

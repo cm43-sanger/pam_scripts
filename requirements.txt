@@ -2,10 +2,15 @@ hdbscan
 h5py
 matplotlib
 networkx
+nextflow
 numpy
 pandas
+pggb
+samtools
 scikit-learn
 scipy
 seaborn
+sourmash_plugin_branchwater
 tqdm
 umap-learn
+vg==1.7
