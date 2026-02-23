@@ -111,7 +111,11 @@ class CondensedDistanceMatrix:
                     lower = np.minimum(i, j)
                     upper = np.maximum(i, j)
                     k = upper * (upper - 1) // 2 + lower
-                    d[k] = 1.0 - chunk["average_containment_ani"].to_numpy()
+                    try:
+                        d[k] = 1.0 - chunk["average_containment_ani"].to_numpy()
+                    except IndexError:
+                        print(chunk)
+                        raise RuntimeError
                     pbar.update(len(chunk))
         return cls(names=df["name"].to_list(), d=d)
 
