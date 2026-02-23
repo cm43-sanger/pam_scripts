@@ -114,7 +114,17 @@ class CondensedDistanceMatrix:
                     try:
                         d[k] = 1.0 - chunk["average_containment_ani"].to_numpy()
                     except IndexError:
-                        print(chunk)
+                        with pd.option_context(
+                            "display.max_rows",
+                            None,
+                            "display.max_columns",
+                            None,
+                            "display.width",
+                            None,
+                            "display.max_colwidth",
+                            None,
+                        ):
+                            print(chunk)
                         raise RuntimeError
                     pbar.update(len(chunk))
         return cls(names=df["name"].to_list(), d=d)
