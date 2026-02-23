@@ -25,6 +25,7 @@ def plot_embedding(
     s: float = 8.0,
     alpha: float = 0.8,
     palette: str = "tab10",
+    show_counts: bool = False,
     subplots_kwargs: typing.Optional[dict] = None,
 ) -> Figure:
     if subplots_kwargs is None:
@@ -53,13 +54,20 @@ def plot_embedding(
         subset = embedding[embedding["label"] == label]
         x, y = bounding_square(subset["x"], subset["y"])
         axis.plot(x, y, "k:", linewidth=1.0)
-        axis.text(max(x), max(y), label, fontsize=8, ha="left", va="bottom")
+        axis.text(
+            max(x),
+            max(y),
+            str(len(subset)) if show_counts else label,
+            fontsize=8,
+            ha="left",
+            va="bottom",
+        )
     axis.set_xlabel("$X$")
     axis.set_ylabel("$Y$")
     axis.axis("equal")
-    fig.suptitle(
-        f"{unique_labels.size} clusters, {num_unclustered} unclustered samples"
-    )
+    # fig.suptitle(
+    #     f"{unique_labels.size} clusters, {num_unclustered} unclustered samples"
+    # )
     fig.tight_layout()
     return fig
 
@@ -75,8 +83,8 @@ def main():
     parser.add_argument(
         "-d",
         "--dpi",
-        type=float,
         default=DEFAULT_DPI,
+        type=float,
         help=f"DPI for output PNG (default {DEFAULT_DPI})",
     )
     parser.add_argument(
@@ -85,6 +93,10 @@ def main():
         action="store_true",
         help="Show interactive plot of the embedding",
     )
+    parser.add_argument(
+        "-c", "--counts", action="store_true", help="Show cluster counts instead of ID"
+    )
+    parser.add_argument("-t", "--title", default="", type=str, help="Plot title")
     args = parser.parse_args()
 
     dpi = args.dpi
@@ -96,7 +108,9 @@ def main():
         raise ValueError(f"invalid DPI value: {dpi!r}")
     with pam_io.get_input_handle(args.input_tsv) as f:
         embedding = pd.read_csv(f, sep="\t")
-    fig = plot_embedding(embedding)
+    fig = plot_embedding(embedding, show_counts=counts)
+    if args.title:
+        fig.suptitle(title)
     fig.savefig(args.output, dpi=dpi)
     if args.interactive:
         plt.show()

@@ -9,6 +9,8 @@ params.kmer_size = 21
 params.force = false
 params.keep_intermediate = false
 params.percent_identity = 90
+params.image = null
+params.seed = 42
 
 // Failing because out of space - clear up some
 // Remake pggb environment with latest pggb and vg=0.17.0
@@ -29,6 +31,7 @@ erroneous kmers based on estimated coverage.
 Required arguments:
   --manifest MANIFEST  Path to CSV manifest in (name,read1,read2) format
   --ref REF            Path to reference sequence in fasta format
+  --image IMAGE        Path to pggb singularity image
   --output_directory OUTPUT_DIRECTORY
                        Path to output directory
 
@@ -49,9 +52,14 @@ if (!params.manifest) {
 if (!params.ref) {
     error "Please provide --ref with the path to the reference"
 }
+if (!params.image) {
+    error "Please provide --image with the path to the pggb singularity image"
+}
 if (!params.output_directory) {
     error "Please provide --output_directory with the path to the proposed output directory"
 }
+
+def image_abs = file(params.image).toAbsolutePath()
 
 process manysketch {
     cpus 11
@@ -82,7 +90,9 @@ process estimate_ani {
 
     script:
     """
-    sourmash2phylip --output=distances.phylip --kmer_length=$params.kmer_size ${manysketch}
+    sourmash2phylip \
+        --output=distances.phylip \
+        --kmer_length=$params.kmer_size ${manysketch}
     """
 }
 
@@ -98,7 +108,11 @@ process embed {
 
     script:
     """
-    kpy-embed2 --num_jobs=$task.cpus --output_tsv=embedding.tsv --seed=42 ${distances}
+    kpy-embed2 \
+        --num_jobs=$task.cpus \
+        --output_tsv=embedding.tsv \
+        --seed=$params.seed \
+        ${distances}
     """
 }
 
@@ -163,7 +177,7 @@ process assemble_gfa {
     tuple path(cluster), path("graphs/*.gfa"), path("graphs/*")
 
     script:
-        """
+    """
     base=\$(basename "$cluster" .csv)
     n_haplotypes=\$(wc -l < "$cluster")
     fasta="graphs/\${base}.fa"
@@ -187,56 +201,22 @@ process assemble_gfa {
         echo "Skipping $cluster (only one entry)"
         > "graphs/\${base}.empty.gfa"
     else
-        pggb \
-            --input-fasta="\$fasta" \
-            --n-haplotypes=\${n_haplotypes} \
-            --map-pct-id=$params.percent_identity \
-            --mash-kmer=$params.kmer_size \
-            --output-dir=graphs \
-            --threads=11
+        singularity \
+            run \
+            -B "\$(pwd):/data" \
+            "$image_abs" \
+            pggb \
+                --input-fasta="/data/\${fasta}" \
+                --n-haplotypes=\${n_haplotypes} \
+                --map-pct-id=$params.percent_identity \
+                --mash-kmer=$params.kmer_size \
+                --output-dir="/data/graphs" \
+                --threads=11
     fi
     awk '/^>/ {name=\$1; if(name in seen){print "Duplicate: " name; exit 1} seen[name]=1}' "\$fasta"
     ls -lh
     ls -lh graphs/
     """
-    // """
-    // base=\$(basename "$cluster" .csv)
-    // n_haplotypes=\$(wc -l < "$cluster")
-    // fasta="graphs/\${base}.fa"
-    // echo \$fasta
-    // mkdir -p graphs
-    // mkdir -p temp
-    // awk -F',' '{
-    //     name=\$1; file=\$2;
-    //     idx=0;
-    //     while ( getline seq < file ) {
-    //         if ( seq ~ /^>/ ) {
-    //             idx++;
-    //             print ">" name "#" idx
-    //         } else {
-    //             print seq
-    //         }
-    //     }
-    //     close(file)
-    // }' "$cluster" > "\$fasta"
-    // samtools faidx "\$fasta"
-    // if [[ \${n_haplotypes} -eq 1 ]]; then
-    //     echo "Skipping $cluster (only one entry)"
-    //     > "graphs/\${base}.empty.gfa"
-    // else
-    //     pggb \
-    //         --input-fasta="\$fasta" \
-    //         --map-pct-id=$params.percent_identity \
-    //         --mash-kmer=$params.kmer_size \
-    //         --n-haplotypes=\${n_haplotypes} \
-    //         --output-dir=graphs \
-    //         --temp-dir=temp \
-    //         --threads=11
-    // fi
-    // awk '/^>/ {name=\$1; if(name in seen){print "Duplicate: " name; exit 1} seen[name]=1}' "\$fasta"
-    // ls -lh
-    // ls -lh graphs/
-    // """
 }
 
 process autoindex {
@@ -253,9 +233,67 @@ process autoindex {
     script:
     """
     base=\$(basename "$cluster" .csv)
-    vg autoindex --workflow=giraffe --gfa="$gfa" --prefix="graphs/\${base}" --threads=11
+    mkdir -p graphs
+    vg \
+        autoindex \
+        --workflow=giraffe \
+        --gfa="$gfa" \
+        --prefix="graphs/\${base}" \
+        --threads=11
     """
 }
+
+// process autoindex {
+//     cpus 11
+//     publishDir "$params.output_directory", mode: 'copy', pattern: "graphs/*"
+//     // conda "vg==1.70"
+
+//     input:
+//     tuple path(cluster), path(gfa)
+
+//     output:
+//     path("graphs/*")
+
+//     script:
+//     """
+//     base=\$(basename "$cluster" .csv)
+//     echo $cluster
+//     echo $gfa
+//     head $gfa
+//     pwd
+//     cp $gfa graph.gfa
+//     singularity \
+//         run \
+//         -B "\$(pwd):/data" \
+//         "$image_abs" \
+//         ls -lha /data/
+//     singularity \
+//         run \
+//         -B "\$(pwd):/data" \
+//         "$image_abs" \
+//         ls -lha /data/
+//     singularity \
+//         run \
+//         -B "\$(pwd):/data" \
+//         "$image_abs" \
+//         head "/data/graph.gfa"
+//     singularity \
+//         run \
+//         -B "\$(pwd):/data" \
+//         "$image_abs" \
+//         vg validate "/data/graph.gfa"
+//     singularity \
+//         run \
+//         -B "\$(pwd):/data" \
+//         "$image_abs" \
+//         vg \
+//             autoindex \
+//             --workflow=giraffe \
+//             --gfa="/data/graph.gfa" \
+//             --prefix="/data/graphs/\${base}" \
+//             --threads=11
+//     """
+// }
 
 workflow {
     if (!workflow.resume) {
@@ -284,9 +322,14 @@ workflow {
         .map { filenames, signatures -> filenames }
         .flatten()
     make_fa(cluster_filenames)
+    cluster_filenames = cluster_filenames
+        .toList()
+        .map { it.reverse() }
+        .flatten()
     graphs = assemble_gfa(cluster_filenames)
     gfas = graphs
         .filter { cluster, gfa, files -> !gfa.name.contains('empty') }
         .map { cluster, gfa, files -> tuple cluster, gfa }
+    gfas.view()
     indices = autoindex(gfas)
 }
