@@ -49,13 +49,13 @@ def plot_embedding(
     )
     unique_labels = embedding["label"].unique()
     num_unclustered = sum(embedding["label"] == -1)
-    if show_counts:
-        for label in unique_labels:
-            if label == -1:
-                continue
-            subset = embedding[embedding["label"] == label]
-            x, y = bounding_square(subset["x"], subset["y"])
-            axis.plot(x, y, "k:", linewidth=1.0)
+    for label in unique_labels:
+        if label == -1:
+            continue
+        subset = embedding[embedding["label"] == label]
+        x, y = bounding_square(subset["x"], subset["y"])
+        axis.plot(x, y, "k:", linewidth=1.0)
+        if show_counts:
             axis.text(
                 max(x),
                 max(y),
