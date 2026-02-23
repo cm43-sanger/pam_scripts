@@ -114,7 +114,7 @@ class CondensedDistanceMatrix:
                     try:
                         d[k] = 1.0 - chunk["average_containment_ani"].to_numpy()
                     except IndexError:
-                        chunk.to_csv("$WAREHOUSE/scripts/bad.csv")
+                        chunk.to_csv("/warehouse/hpag_wh01/cm43/scripts/bad.csv")
                         raise RuntimeError
                     pbar.update(len(chunk))
         return cls(names=df["name"].to_list(), d=d)
