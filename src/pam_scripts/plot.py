@@ -68,7 +68,7 @@ def plot_embedding(
     axis.axis("equal")
     phrase = f"{name} " if name else ""
     fig.suptitle(
-        f"{phrase} {len(embedding)} samples in {unique_labels.size} clusters"
+        f"{len(embedding)} {phrase}samples in {unique_labels.size} clusters"
         # f"\n({num_unclustered} unclustered samples)"
     )
     fig.tight_layout()
