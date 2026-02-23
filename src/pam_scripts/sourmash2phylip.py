@@ -106,6 +106,12 @@ class CondensedDistanceMatrix:
             )
             with tqdm.tqdm(total=total, desc="Pivoting", unit_scale=True) as pbar:
                 for chunk in pd.read_csv(csv_filename, chunksize=chunksize):
+                    for lineno, name in enumerate(chunk["query_name"], start=1):
+                        if name not in names_lookup:
+                            print(f"Missing query {name!r} at line {lineno}")
+                    for lineno, name in enumerate(chunk["match_name"], start=1):
+                        if name not in names_lookup:
+                            print(f"Missing match {name!r} at line {lineno}")
                     i = chunk["query_name"].map(names_lookup).to_numpy(dtype=np.int64)
                     j = chunk["match_name"].map(names_lookup).to_numpy(dtype=np.int64)
                     lower = np.minimum(i, j)
