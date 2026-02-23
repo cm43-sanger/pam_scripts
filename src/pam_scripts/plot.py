@@ -22,6 +22,7 @@ def bounding_square(x, y, margin=0.02):
 
 def plot_embedding(
     embedding: pd.DataFrame,
+    name: typing.Optional[str] = None,
     s: float = 8.0,
     alpha: float = 0.8,
     palette: str = "tab10",
@@ -65,9 +66,11 @@ def plot_embedding(
     axis.set_xlabel("$X$")
     axis.set_ylabel("$Y$")
     axis.axis("equal")
-    # fig.suptitle(
-    #     f"{unique_labels.size} clusters, {num_unclustered} unclustered samples"
-    # )
+    phrase = f"{name} " if name else ""
+    fig.suptitle(
+        f"{phrase} {len(embedding)} samples in {unique_labels.size} clusters"
+        # f"\n({num_unclustered} unclustered samples)"
+    )
     fig.tight_layout()
     return fig
 
@@ -96,7 +99,7 @@ def main():
     parser.add_argument(
         "-c", "--counts", action="store_true", help="Show cluster counts instead of ID"
     )
-    parser.add_argument("-t", "--title", default="", type=str, help="Plot title")
+    parser.add_argument("-t", "--name", default=None, type=str, help="Species name")
     args = parser.parse_args()
 
     dpi = args.dpi
@@ -108,9 +111,7 @@ def main():
         raise ValueError(f"invalid DPI value: {dpi!r}")
     with pam_io.get_input_handle(args.input_tsv) as f:
         embedding = pd.read_csv(f, sep="\t")
-    fig = plot_embedding(embedding, show_counts=args.counts)
-    if args.title:
-        fig.suptitle(args.title)
+    fig = plot_embedding(embedding, name=args.name, show_counts=args.counts)
     fig.savefig(args.output, dpi=dpi)
     if args.interactive:
         plt.show()
