@@ -104,6 +104,11 @@ class CondensedDistanceMatrix:
                 check=True,
                 text=True,
             )
+            import shutil
+
+            shutil.copyfile(
+                csv_filename, "/warehouse/hpag_wh01/cm43/scripts/sourmash.csv"
+            )
             with tqdm.tqdm(total=total, desc="Pivoting", unit_scale=True) as pbar:
                 for chunk in pd.read_csv(csv_filename, chunksize=chunksize):
                     for lineno, name in enumerate(chunk["query_name"], start=1):
