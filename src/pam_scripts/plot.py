@@ -49,20 +49,21 @@ def plot_embedding(
     )
     unique_labels = embedding["label"].unique()
     num_unclustered = sum(embedding["label"] == -1)
-    for label in unique_labels:
-        if label == -1:
-            continue
-        subset = embedding[embedding["label"] == label]
-        x, y = bounding_square(subset["x"], subset["y"])
-        axis.plot(x, y, "k:", linewidth=1.0)
-        axis.text(
-            max(x),
-            max(y),
-            str(len(subset)) if show_counts else label,
-            fontsize=8,
-            ha="left",
-            va="bottom",
-        )
+    if show_counts:
+        for label in unique_labels:
+            if label == -1:
+                continue
+            subset = embedding[embedding["label"] == label]
+            x, y = bounding_square(subset["x"], subset["y"])
+            axis.plot(x, y, "k:", linewidth=1.0)
+            axis.text(
+                max(x),
+                max(y),
+                str(len(subset)) if show_counts else label,
+                fontsize=8,
+                ha="left",
+                va="bottom",
+            )
     axis.set_xlabel("$X$")
     axis.set_ylabel("$Y$")
     axis.axis("equal")
