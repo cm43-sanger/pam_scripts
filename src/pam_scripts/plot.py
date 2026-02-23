@@ -108,9 +108,9 @@ def main():
         raise ValueError(f"invalid DPI value: {dpi!r}")
     with pam_io.get_input_handle(args.input_tsv) as f:
         embedding = pd.read_csv(f, sep="\t")
-    fig = plot_embedding(embedding, show_counts=counts)
+    fig = plot_embedding(embedding, show_counts=args.counts)
     if args.title:
-        fig.suptitle(title)
+        fig.suptitle(args.title)
     fig.savefig(args.output, dpi=dpi)
     if args.interactive:
         plt.show()
