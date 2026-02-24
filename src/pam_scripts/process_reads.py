@@ -87,7 +87,7 @@ class Comparer:
         best_name = max_ani_row["name"]
         print(best_name)
         gam = os.path.join(output_directory, "alignments.gam")
-        # self.map_reads(best_name, reads, gam)
+        self.map_reads(best_name, reads, gam)
 
 
 def get_parser():
