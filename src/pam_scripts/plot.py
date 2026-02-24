@@ -54,7 +54,6 @@ def plot_embedding(
             continue
         subset = embedding[embedding["label"] == label]
         num_unique_sub_labels = subset["sub_label"].nunique()
-        print(label, num_unique_sub_labels, len(subset))
         is_singleton = num_unique_sub_labels == 1
         x, y = bounding_square(subset["x"], subset["y"])
         axis.plot(x, y, "k:" if is_singleton else "k-", linewidth=1.0)
