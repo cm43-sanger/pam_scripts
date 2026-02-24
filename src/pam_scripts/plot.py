@@ -53,7 +53,7 @@ def plot_embedding(
         if label == -1:
             continue
         subset = embedding[embedding["label"] == label]
-        num_unique_sub_labels = embedding["sub_label"].nunique()
+        num_unique_sub_labels = subset["sub_label"].nunique()
         print(label, num_unique_sub_labels, len(subset))
         is_singleton = num_unique_sub_labels == 1
         x, y = bounding_square(subset["x"], subset["y"])
