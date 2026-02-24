@@ -53,8 +53,10 @@ def plot_embedding(
         if label == -1:
             continue
         subset = embedding[embedding["label"] == label]
+        num_unique_sub_labels = embedding["sub_label"].nunique()
+        is_singleton = num_unique_sub_labels == 1
         x, y = bounding_square(subset["x"], subset["y"])
-        axis.plot(x, y, "k:", linewidth=1.0)
+        axis.plot(x, y, "k:" if is_singleton else "k-", linewidth=1.0)
         if show_counts:
             axis.text(
                 max(x),
